@@ -183,7 +183,7 @@ export default function EmployeesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
+                    <label className="flex text-sm font-medium text-foreground mb-1.5 items-center gap-1.5">
                       <Mail className="h-3.5 w-3.5" />
                       Email
                     </label>
@@ -194,7 +194,7 @@ export default function EmployeesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
+                    <label className="flex text-sm font-medium text-foreground mb-1.5 items-center gap-1.5">
                       <Phone className="h-3.5 w-3.5" />
                       Contact Number
                     </label>
@@ -317,7 +317,7 @@ export default function EmployeesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
+                    <label className="flex text-sm font-medium text-foreground mb-1.5 items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5" />
                       Created At
                     </label>

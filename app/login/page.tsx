@@ -49,7 +49,10 @@ export default function LoginPage() {
           router.push("/admin");
           break;
         case "business":
-          router.push("/dashboard");
+          router.push("/employee");
+          break;
+        case "user":
+          router.push("/user");
           break;
         default:
           router.push("/");
