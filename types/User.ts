@@ -1,4 +1,4 @@
-type UserRole =  'User' | 'Employee' | 'Admin'; 
+type UserRole = 'User' | 'Employee' | 'Admin';
 
 export interface User {
   id: string;
@@ -19,4 +19,5 @@ export interface User {
   longitude?: number;
   role: UserRole;
   createdAt: string;
+  status: 'active' | 'inactive';
 }

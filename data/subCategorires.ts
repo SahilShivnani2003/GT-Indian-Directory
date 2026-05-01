@@ -1,0 +1,58 @@
+export const subcategories: Subcategory[] = [
+  {
+    id: "sub1",
+    categoryId: "cat1",
+    name: "Restaurants",
+    slug: "restaurants",
+    description: "Places offering food and dining services including cafes and fine dining.",
+  },
+  {
+    id: "sub2",
+    categoryId: "cat1",
+    name: "Street Food",
+    slug: "street-food",
+    description: "Local street vendors serving quick and affordable food.",
+  },
+  {
+    id: "sub3",
+    categoryId: "cat2",
+    name: "Hospitals",
+    slug: "hospitals",
+    description: "Healthcare institutions providing medical and surgical treatment.",
+  },
+  {
+    id: "sub4",
+    categoryId: "cat2",
+    name: "Pharmacies",
+    slug: "pharmacies",
+    description: "Medical stores offering medicines and healthcare products.",
+  },
+  {
+    id: "sub5",
+    categoryId: "cat3",
+    name: "Schools",
+    slug: "schools",
+    description: "Educational institutions for primary and secondary education.",
+  },
+  {
+    id: "sub6",
+    categoryId: "cat3",
+    name: "Coaching Centers",
+    slug: "coaching-centers",
+    description: "Institutes providing additional academic or competitive exam training.",
+  },
+  {
+    id: "sub7",
+    categoryId: "cat4",
+    name: "Gyms",
+    slug: "gyms",
+    description: "Fitness centers equipped for physical exercise and training.",
+  },
+  {
+    id: "sub8",
+    categoryId: "cat4",
+    name: "Yoga Centers",
+    slug: "yoga-centers",
+    description: "Places offering yoga classes and wellness sessions.",
+  },
+];
