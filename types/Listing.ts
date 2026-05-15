@@ -24,3 +24,21 @@ export interface Listing {
   pinCode: string;
   createdAt: string;
 }
+
+export interface CreateListing {
+  businessName: string;
+  description: string;
+  contactNumber: string;
+  email: string;
+  website: string;
+  categoryId: string;
+  categoryName: string;
+  images: string[];
+  addressLine1: string;
+  addressLine2?: string;
+  area: string;
+  district: string;
+  city: string;
+  state: string;
+  pinCode: string;
+}

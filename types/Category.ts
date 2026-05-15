@@ -8,3 +8,10 @@ export interface Category {
   isActive: boolean;
   createdAt: string;
 }
+
+export interface CreateCategory {
+  name: string;
+  description: string;
+  imageUrl: string;
+  isActive: boolean;
+}

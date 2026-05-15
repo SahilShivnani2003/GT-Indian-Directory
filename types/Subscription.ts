@@ -9,3 +9,10 @@ export interface Subscription {
   daysRemaining: number;
   createdAt: string;
 }
+
+export interface CreateSubscription {
+  listingId: string;
+  planId: string;
+  startDate: string;
+  endDate: string;
+}
