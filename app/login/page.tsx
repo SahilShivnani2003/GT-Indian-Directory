@@ -5,61 +5,60 @@ import Link from "next/link";
 import Image from "next/image";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { User, Building2, ShieldCheck } from "lucide-react";
-
-// Simulated role-based credentials — replace with real DB auth later
-const MOCK_USERS = [
-  { email: "admin@gtidirectory.com", password: "admin123", role: "admin" },
-  { email: "user@gtidirectory.com", password: "user123", role: "user" },
-  { email: "business@gtidirectory.com", password: "biz123", role: "business" },
-];
+import { User as UserIcon, Building2, ShieldCheck } from "lucide-react";
+import { useAuthStore } from "@/store/useAuthStore";
+import { authService } from "@/service/apis/auth.service";
+import  { User } from "@/types/User";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { setAuth } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    try {
+      const data = {
+        contactNumber: phone,
+        password: password,
+      };
+      const response = await authService.login(data);   
+      
+      if (response.data?.success) {
+        console.log("Login successful : ", response.data);
+        const user : User = response.data?.data?.userResponseDto;
+        const token = response.data?.data?.token;
 
-    // Simulate async auth
-    setTimeout(() => {
-      const matched = MOCK_USERS.find(
-        (u) => u.email === email && u.password === password,
+        setAuth(user, token);
+
+        switch (user?.role) {
+          case "Admin":
+            router.push("/admin");
+            break;
+          case "Employee":
+            router.push("/employee");
+            break;
+          case "User":
+            router.push("/user");
+            break;
+          default:
+            router.push("/");
+        }
+      }
+    } catch (error: any) {
+      console.error("Login error : ", error);
+      setError(
+        error?.message || "An error occurred during login. Please try again.",
       );
-
-      if (!matched) {
-        setError("Invalid email or password. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      // Store session info
-      localStorage.setItem("authRole", matched.role);
-      localStorage.setItem("authEmail", matched.email);
-
-      // Role-based redirect
-      switch (matched.role) {
-        case "admin":
-          router.push("/admin");
-          break;
-        case "business":
-          router.push("/employee");
-          break;
-        case "user":
-          router.push("/user");
-          break;
-        default:
-          router.push("/");
-      }
-
       setLoading(false);
-    }, 800);
+      return;
+    }
   };
 
   return (
@@ -88,7 +87,7 @@ export default function LoginPage() {
             {[
               {
                 label: "User",
-                icon: <User className="h-3 w-3" />,
+                icon: <UserIcon className="h-3 w-3" />,
                 color: "bg-blue-50 text-blue-700",
               },
               {
@@ -123,16 +122,17 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="mt-6 flex flex-col gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-foreground">
-                Email Address
+                Phone Number
               </label>
               <input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="tel"
+                placeholder="9876543210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 required
-                autoComplete="email"
+                autoComplete="tel"
+                maxLength={10}
               />
             </div>
 
@@ -210,27 +210,6 @@ export default function LoginPage() {
               Sign Up
             </Link>
           </p>
-        </div>
-
-        {/* Dev hint — remove in production */}
-        <div className="mt-4 rounded-xl border border-dashed border-border bg-secondary/50 p-4 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1.5">Test credentials</p>
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <User className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                <span>User — user@gtidirectory.com / user123</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Building2 className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                <span>Business — business@gtidirectory.com / biz123</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                <span>Admin — admin@gtidirectory.com / admin123</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">

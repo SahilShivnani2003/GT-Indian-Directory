@@ -34,11 +34,18 @@ const menuItems = [
 export function AdminSidebar() {
   const pathname = usePathname();
 
+  const isActive = (href: string) => {
+    // Exact-match only for the root admin route to avoid
+    // "/admin".startsWith("/admin") matching every sub-route.
+    if (href === "/admin") return pathname === "/admin";
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
   return (
     <>
       {/* Logo Section */}
       <div className="border-b border-border px-6 py-6">
-        <Link href="/admin" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <Image
             src="/logoBgRemoved.png"
             alt="GTID Logo"
@@ -54,15 +61,13 @@ export function AdminSidebar() {
       <nav className="flex flex-1 flex-col gap-1 px-4 py-6">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive =
-            pathname === item.href || pathname.startsWith(item.href + "/");
 
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-                isActive
+                isActive(item.href)
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}

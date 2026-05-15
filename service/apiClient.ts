@@ -1,17 +1,14 @@
 import { useAuthStore } from "@/store/useAuthStore";
 import { ApiError } from "@/types/ApiError";
 import axios from "axios";
-import { error } from "console";
 
 const BASE_URL = 'https://localhost:44394/api';
 
 export const publicClient = axios.create({
     baseURL: BASE_URL,
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    timeout: 10000
-})
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 50000
+});
 
 publicClient.interceptors.response.use(
     response => response,
@@ -20,39 +17,38 @@ publicClient.interceptors.response.use(
             status: error?.response?.status,
             message: error?.response?.data?.message || error.message || 'An unexpected error occurred',
             response: error?.response?.data
-        }
-
+        };
         return Promise.reject(apiError);
     }
 );
 
 export const privateClient = axios.create({
     baseURL: BASE_URL,
-    headers: {
-        'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     timeout: 10000
-})
+});
 
-publicClient.interceptors.request.use(
+// ✅ Fixed: getState() instead of hook, and attached to privateClient
+privateClient.interceptors.request.use(
     config => {
-        const token = useAuthStore().token;
+        const token = useAuthStore.getState().token; 
+        console.log(token); 
         if (token) {
             config.headers['Authorization'] = `Bearer ${token}`;
         }
         return config;
     },
     error => Promise.reject(error)
-)
+);
 
-publicClient.interceptors.response.use(
+privateClient.interceptors.response.use(
     response => response,
     error => {
         const apiError: ApiError = {
             status: error?.response?.status,
             message: error?.response?.data?.message || error.message || 'An unexpected error occurred',
             response: error?.response?.data
-        }
+        };
         return Promise.reject(apiError);
     }
-)
+);

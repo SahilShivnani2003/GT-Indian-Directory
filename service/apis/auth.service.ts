@@ -1,4 +1,3 @@
-import { register } from "module";
 import { privateClient, publicClient } from "../apiClient";
 import { CreateUser, UserRole } from "@/types/User";
 

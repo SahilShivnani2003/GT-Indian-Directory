@@ -1,43 +1,67 @@
-'use client'
+"use client";
 
-import { useState } from "react"
-import { Trash2, Edit2, Eye, Plus } from "lucide-react"
-import { listings } from "@/data/listings"
-import { DataTable } from "@/components/admin/DataTable"
+import { useState, useEffect } from "react";
+import { Plus } from "lucide-react";
+import { DataTable } from "@/components/admin/DataTable";
+import { listingService } from "@/service/apis/listing.service";
+import { Listing } from "@/types/Listing";
+import { AddListingModal } from "@/components/admin/listing/AddListingModal";
 
 export default function AdminListingsPage() {
-  const [filterStatus, setFilterStatus] = useState<"all" | "verified" | "pending">("all")
-  const [selectedListing, setSelectedListing] = useState<any>(null)
+  const [filterStatus, setFilterStatus] = useState<
+    "all" | "verified" | "pending"
+  >("all");
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const filteredListings = listings.filter((listing) => {
-    if (filterStatus === "verified") return listing.verified
-    if (filterStatus === "pending") return !listing.verified
-    return true
-  })
+  useEffect(() => {
+    fetchListings();
+  }, []);
 
-  const handleDelete = (listing: any) => {
-    alert(`Delete listing: ${listing.name}`)
-  }
+  const fetchListings = async () => {
+    try {
+      const response = await listingService.getListing();
+      setListings(response.data?.data || []);
+    } catch (error) {
+      console.error("Error fetching listings:", error);
+    }
+  };
 
-  const handleEdit = (listing: any) => {
-    setSelectedListing(listing)
-  }
+  const handleDelete = (listing: Listing) => {
+    alert(`Delete listing: ${listing.businessName}`);
+  };
 
-  const handleView = (listing: any) => {
-    window.location.href = `/listings/${listing.slug}`
-  }
+  const handleEdit = (listing: Listing) => {
+    setSelectedListing(listing);
+  };
+
+  const handleView = (listing: Listing) => {
+    window.location.href = `/listings/${listing.slug}`;
+  };
+
+  const filteredListings = listings.filter((l) => {
+    if (filterStatus === "verified") return l.verified;
+    if (filterStatus === "pending") return !l.verified;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Manage Listings</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            Manage Listings
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             View, edit, and delete business listings
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors">
+        <button
+          onClick={() => setAddOpen(true)}
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+        >
           <Plus className="h-4 w-4" />
           Add Listing
         </button>
@@ -45,12 +69,14 @@ export default function AdminListingsPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted-foreground">Filter:</span>
+        <span className="text-sm font-medium text-muted-foreground">
+          Filter:
+        </span>
         <div className="flex gap-2">
-          {["all", "verified", "pending"].map((status) => (
+          {(["all", "verified", "pending"] as const).map((status) => (
             <button
               key={status}
-              onClick={() => setFilterStatus(status as any)}
+              onClick={() => setFilterStatus(status)}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 filterStatus === status
                   ? "bg-primary text-primary-foreground"
@@ -60,13 +86,11 @@ export default function AdminListingsPage() {
               {status.charAt(0).toUpperCase() + status.slice(1)}
               <span className="ml-1 font-normal">
                 (
-                {
-                  status === "all"
-                    ? listings.length
-                    : status === "verified"
-                      ? listings.filter((l) => l.verified).length
-                      : listings.filter((l) => !l.verified).length
-                }
+                {status === "all"
+                  ? listings.length
+                  : status === "verified"
+                    ? listings.filter((l) => l.verified).length
+                    : listings.filter((l) => !l.verified).length}
                 )
               </span>
             </button>
@@ -77,11 +101,7 @@ export default function AdminListingsPage() {
       {/* Data Table */}
       <DataTable
         columns={[
-          {
-            key: "businessName",
-            label: "Business Name",
-            width: "25%",
-          },
+          { key: "businessName", label: "Business Name", width: "25%" },
           {
             key: "categoryName",
             label: "Category",
@@ -92,16 +112,8 @@ export default function AdminListingsPage() {
               </span>
             ),
           },
-          {
-            key: "city",
-            label: "City",
-            width: "15%",
-          },
-          {
-            key: "contactNumber",
-            label: "Contact",
-            width: "20%",
-          },
+          { key: "city", label: "City", width: "15%" },
+          { key: "contactNumber", label: "Contact", width: "20%" },
           {
             key: "verified",
             label: "Status",
@@ -113,9 +125,7 @@ export default function AdminListingsPage() {
                 }`}
               >
                 <div
-                  className={`h-2 w-2 rounded-full ${
-                    value ? "bg-india-green" : "bg-orange-500"
-                  }`}
+                  className={`h-2 w-2 rounded-full ${value ? "bg-india-green" : "bg-orange-500"}`}
                 />
                 {value ? "Verified" : "Pending"}
               </span>
@@ -128,59 +138,45 @@ export default function AdminListingsPage() {
         onView={handleView}
       />
 
+      {/* Add Listing Modal */}
+      <AddListingModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSuccess={fetchListings}
+      />
+
       {/* Edit Modal */}
       {selectedListing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-2xl rounded-lg bg-card p-6">
-            <h2 className="text-xl font-bold text-foreground mb-4">
+            <h2 className="mb-4 text-xl font-bold text-foreground">
               Edit Listing: {selectedListing.businessName}
             </h2>
-
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="max-h-96 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Business Name
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue={selectedListing.businessName}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue={selectedListing.categoryName}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue={selectedListing.city}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Phone
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue={selectedListing.contactNumber}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
-                </div>
+                {[
+                  {
+                    label: "Business Name",
+                    value: selectedListing.businessName,
+                  },
+                  { label: "Category", value: selectedListing.categoryName },
+                  { label: "City", value: selectedListing.city },
+                  { label: "Phone", value: selectedListing.contactNumber },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      {label}
+                    </label>
+                    <input
+                      type="text"
+                      defaultValue={value}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                  </div>
+                ))}
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
+                <label className="mb-1 block text-sm font-medium text-foreground">
                   Description
                 </label>
                 <textarea
@@ -190,20 +186,19 @@ export default function AdminListingsPage() {
                 />
               </div>
             </div>
-
-            <div className="mt-6 flex gap-3 justify-end">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setSelectedListing(null)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
               >
                 Cancel
               </button>
               <button
                 onClick={() => {
-                  alert("Listing updated successfully!")
-                  setSelectedListing(null)
+                  alert("Listing updated successfully!");
+                  setSelectedListing(null);
                 }}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 Save Changes
               </button>
@@ -212,5 +207,5 @@ export default function AdminListingsPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
