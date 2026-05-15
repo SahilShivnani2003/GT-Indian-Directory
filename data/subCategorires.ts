@@ -1,3 +1,5 @@
+import { Subcategory } from "@/types/SubCategory";
+
 export const subcategories: Subcategory[] = [
   {
     id: "sub1",
