@@ -1,17 +1,50 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Edit, Trash2, Plus, X } from 'lucide-react'
-import { products } from '@/data/products'
 import { DataTable } from '@/components/admin/DataTable'
+import { productService } from '@/service/apis/product.service'
+import { Product } from '@/types/Product'
 
 export default function AdminProductsPage() {
-  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const activeProducts = products.filter((p) => p.status === 'active').length
-  const featuredProducts = products.filter((p) => p.featured).length
+  useEffect(() => {
+    fetchProducts()
+  }, [])
+
+  const fetchProducts = async () => {
+    setLoading(true)
+    try {
+      const response = await productService.getProducts({
+        pageNumber: 1,
+        pageSize: 100,
+      })
+      setProducts(response.data?.data || [])
+    } catch (error) {
+      console.error('Error fetching products:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const activeProducts = products.filter((p) => p.status === 'Active').length
+  const featuredProducts = products.filter((p) => p.isFeatured).length
   const totalRevenue = products.length * 25000 // Mock calculation
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this product?')) return
+    try {
+      await productService.deleteProduct(id)
+      setProducts(products.filter((p) => p.id !== id))
+    } catch (error) {
+      console.error('Error deleting product:', error)
+      alert('Failed to delete product')
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -34,15 +67,15 @@ export default function AdminProductsPage() {
       <div className="grid grid-cols-4 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Products</p>
-          <p className="mt-2 text-3xl font-bold text-foreground">{products.length}</p>
+          <p className="mt-2 text-3xl font-bold text-foreground">{loading ? "—" : products.length}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Active</p>
-          <p className="mt-2 text-3xl font-bold text-india-green">{activeProducts}</p>
+          <p className="mt-2 text-3xl font-bold text-india-green">{loading ? "—" : activeProducts}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Featured</p>
-          <p className="mt-2 text-3xl font-bold text-yellow-500">{featuredProducts}</p>
+          <p className="mt-2 text-3xl font-bold text-yellow-500">{loading ? "—" : featuredProducts}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Estimated Sales</p>
@@ -54,14 +87,14 @@ export default function AdminProductsPage() {
       <DataTable
         columns={[
           { key: 'name', label: 'Product Name', width: '25%' },
-          { key: 'businessName', label: 'Business', width: '20%' },
+          { key: 'listingId', label: 'Business', width: '20%' },
           { key: 'category', label: 'Category', width: '15%' },
           {
             key: 'price',
             label: 'Price',
             width: '12%',
             render: (value, row) => {
-              const product = row as typeof products[0]
+              const product = row as Product
               return (
                 <div>
                   <div className="font-semibold text-foreground">₹{product.discountPrice || product.price}</div>
@@ -80,21 +113,21 @@ export default function AdminProductsPage() {
             render: (value) => (
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                  value === 'active'
+                  value === 'Active'
                     ? 'bg-india-green/10 text-india-green'
-                    : value === 'inactive'
+                    : value === 'Inactive'
                       ? 'bg-yellow-100 text-yellow-800'
                       : 'bg-red-100 text-red-800'
                 }`}
               >
-                {value.charAt(0).toUpperCase() + value.slice(1)}
+                {value}
               </span>
             ),
           },
         ]}
-        data={products}
-        onEdit={(item) => setSelectedProduct(item as typeof products[0])}
-        onDelete={(id) => alert('Product deleted')}
+        data={loading ? [] : products}
+        onEdit={(item) => setSelectedProduct(item as Product)}
+        onDelete={(item) => handleDelete((item as Product).id)}
       />
 
       {/* Edit Modal */}

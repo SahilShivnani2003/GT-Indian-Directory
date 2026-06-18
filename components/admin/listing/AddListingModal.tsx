@@ -112,10 +112,12 @@ export function AddListingModal({
     if (!files.length) return;
 
     try {
-      const response = await imageService.uploadMultipleImages(files);
-
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+      const response = await imageService.uploadMultipleImages(formData);
+      console.log("Image upload response: ", response.data);
       if (response.data?.success) {
-        const urls = response.data.urls;
+        const urls = response.data?.data?.urls;
         setForm((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
       } else {
         console.error("Image upload failed: ", response.data?.message);

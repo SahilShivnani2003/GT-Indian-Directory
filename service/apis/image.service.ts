@@ -6,7 +6,7 @@ export const imageService = {
             'Content-Type': 'multipart/form-data'
         }
     }),
-    uploadMultipleImages: (files: File[]) => privateClient.post('/UploadImage/uploadMultiple', files, {
+    uploadMultipleImages: (formdata: FormData) => privateClient.post('/UploadImage/upload-multiple', formdata, {
         headers: {
             'Content-Type': 'multipart/form-data'
         }

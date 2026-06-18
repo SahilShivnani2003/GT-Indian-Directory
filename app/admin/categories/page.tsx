@@ -1,27 +1,74 @@
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus } from "lucide-react"
 import { DataTable } from "@/components/admin/DataTable"
-import { categories } from "@/data/categories"
+import { categoryService } from "@/service/apis/category.service"
+import { Category, CreateCategory } from "@/types/Category"
 
 export default function CategoriesPage() {
   const [isAdding, setIsAdding] = useState(false)
   const [newCategory, setNewCategory] = useState({ name: "", description: "" })
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleDelete = (category: any) => {
-    alert(`Delete category: ${category.name}`)
+  useEffect(() => {
+    fetchCategories()
+  }, [])
+
+  const fetchCategories = async () => {
+    setLoading(true)
+    try {
+      const response = await categoryService.getCategories({ isAcitve: true })
+      setCategories(response.data?.data?.data || [])
+    } catch (error) {
+      console.error("Error fetching categories:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleEdit = (category: any) => {
+  const handleDelete = async (category: any) => {
+    if (!confirm("Are you sure you want to delete this category?")) return
+    try {
+      const categoryId = category.id;
+      console.log('Category id : ', categoryId)
+      const response = await categoryService.deleteCategory(categoryId)
+      if(response.data?.success){
+        alert('Category deleted successfully');
+        setCategories(categories.filter((c) => c.id !== categoryId))
+      }
+      
+    } catch (error) {
+      console.error("Error deleting category:", error)
+      alert("Failed to delete category")
+    }
+  }
+
+  const handleEdit = (category: Category) => {
     alert(`Edit category: ${category.name}`)
   }
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (newCategory.name.trim()) {
-      alert(`Added category: ${newCategory.name}`)
-      setNewCategory({ name: "", description: "" })
-      setIsAdding(false)
+      try {
+
+        const data: CreateCategory = {
+          name: newCategory.name,
+          description: newCategory.description,
+          imageUrl: 'image',
+          isActive: true,
+        }
+        const response = await categoryService.createCategory(data)
+        if (response.data?.success) {
+          setCategories([...categories, response.data.data])
+          setNewCategory({ name: "", description: "" })
+          setIsAdding(false)
+        }
+      } catch (error) {
+        console.error("Error creating category:", error)
+        alert("Failed to create category")
+      }
     }
   }
 
@@ -96,7 +143,7 @@ export default function CategoriesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div> 
       )}
 
       {/* Categories Table */}

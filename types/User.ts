@@ -1,5 +1,7 @@
 export type UserRole = 'User' | 'Employee' | 'Admin';
 
+export type Status = 'Active' | 'Inactive' | 'Pending' | 'Draft';
+
 export interface User {
   id: string;
   name: string;
@@ -19,12 +21,13 @@ export interface User {
   longitude?: number;
   role: UserRole;
   createdAt: string;
-  status: 'active' | 'inactive';
+  status: Status;
 }
 
 export interface CreateUser {
   name: string;
   email: string;
+  password?: string;
   contactNumber: string;
   addressLine1: string;
   addressLine2?: string;
@@ -32,6 +35,7 @@ export interface CreateUser {
   city: string;
   state: string;
   pincode: string;
+  status?: Status;
   aadharNumber?: string;
   panNumber?: string;
   agreementCopyUrl?: string;

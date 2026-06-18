@@ -21,8 +21,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 const navLinks = [
   { href: "/listings", label: "Listings", icon: ShoppingBag },
-  { href: "/categories/education-training", label: "Careers", icon: Briefcase },
-  { href: "/categories/real-estate", label: "Properties", icon: Building2 },
+  { href: "/careers", label: "Careers", icon: Briefcase },
+  { href: "/properties", label: "Properties", icon: Building2 },
   { href: "/product", label: "Products", icon: LayoutGrid },
   { href: "/tourist-places", label: "Tourist Places", icon: LayoutGrid },
 ];

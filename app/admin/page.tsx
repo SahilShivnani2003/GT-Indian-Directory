@@ -1,23 +1,68 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { DataTable } from "@/components/admin/DataTable";
 import { StatsCard } from "@/components/admin/StateCard";
-import { listings } from "@/data/listings";
-import { plans } from "@/data/plans";
+import { listingService } from "@/service/apis/listing.service";
+import { planService } from "@/service/apis/plans.service";
+import { authService } from "@/service/apis/auth.service";
+import { Listing } from "@/types/Listing";
+import { Plan } from "@/types/Plan";
+import { User } from "@/types/User";
 import {
   ShoppingBag,
   Users,
-  FolderOpen,
-  TrendingUp,
-  Eye,
   CheckCircle,
   Clock,
 } from "lucide-react";
 
-const recentListings = listings.slice(0, 5);
-const pendingListings = listings.filter((l) => !l.verified).slice(0, 5);
-
 export default function AdminDashboard() {
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Fetch listings
+      const listingsRes = await listingService.getListing({
+        pageNumber: 1,
+        pageSize: 5,
+        categoryId: "",
+        status: "Active",
+        search: "",
+        isFeatured: false,
+      });
+      setListings(listingsRes.data?.data?.data || []);
+
+      // Fetch plans
+      const plansRes = await planService.getPlans();
+      setPlans(plansRes.data?.data || []);
+
+      // Fetch users
+      const usersRes = await authService.getAllUser({
+        pageNumber: 1,
+        pageSize: 100,
+        role: "User",
+      });
+      setTotalUsers(usersRes.data?.data?.totalRecords || 0);
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const recentListings = listings.slice(0, 5);
+  const pendingListings = listings.filter((l) => !l.verified).slice(0, 5);
+  const verifiedCount = listings.filter((l) => l.verified).length;
+  const pendingCount = listings.filter((l) => !l.verified).length;
+
   return (
     <div className="space-y-8">
       {/* Key Metrics */}
@@ -28,7 +73,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatsCard
             title="Total Listings"
-            value={listings.length}
+            value={loading ? "—" : listings.length}
             subtitle="Active business directories"
             icon={ShoppingBag}
             trend={{ value: 12, isPositive: true }}
@@ -36,7 +81,7 @@ export default function AdminDashboard() {
           />
           <StatsCard
             title="Verified Listings"
-            value={listings.filter((l) => l.verified).length}
+            value={loading ? "—" : verifiedCount}
             subtitle="Approved & live"
             icon={CheckCircle}
             trend={{ value: 8, isPositive: true }}
@@ -44,7 +89,7 @@ export default function AdminDashboard() {
           />
           <StatsCard
             title="Pending Review"
-            value={listings.filter((l) => !l.verified).length}
+            value={loading ? "—" : pendingCount}
             subtitle="Awaiting approval"
             icon={Clock}
             trend={{ value: 3, isPositive: false }}
@@ -52,7 +97,7 @@ export default function AdminDashboard() {
           />
           <StatsCard
             title="Total Users"
-            value="1,234"
+            value={loading ? "—" : totalUsers}
             subtitle="Registered members"
             icon={Users}
             trend={{ value: 5, isPositive: true }}
@@ -67,7 +112,7 @@ export default function AdminDashboard() {
           Subscription Plans
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {plans.slice(0, 3).map((plan) => (
+          {(loading ? [] : plans.slice(0, 3)).map((plan) => (
             <div
               key={plan.id}
               className="rounded-lg border border-border bg-card p-4"

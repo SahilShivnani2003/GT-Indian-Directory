@@ -32,7 +32,7 @@ export default function LoginPage() {
       
       if (response.data?.success) {
         console.log("Login successful : ", response.data);
-        const user : User = response.data?.data?.userResponseDto;
+        const user : User = response.data?.data?.user;
         const token = response.data?.data?.token;
 
         setAuth(user, token);

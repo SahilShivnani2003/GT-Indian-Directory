@@ -1,15 +1,43 @@
 "use client";
 
-import { plans } from "@/data/plans";
+import { useEffect, useState } from "react";
 import { Edit2, Trash2 } from "lucide-react";
+import { planService } from "@/service/apis/plans.service";
+import { Plan } from "@/types/Plan";
 
 export default function PlansPage() {
-  const handleEdit = (plan: any) => {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchPlans = async () => {
+    setLoading(true);
+    try {
+      const response = await planService.getPlans();
+      setPlans(response.data?.data || []);
+    } catch (error) {
+      console.error("Error fetching plans:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (plan: Plan) => {
     alert(`Edit plan: ${plan.name}`);
   };
 
-  const handleDelete = (plan: any) => {
-    alert(`Delete plan: ${plan.name}`);
+  const handleDelete = async (planId: string) => {
+    if (!confirm("Are you sure you want to delete this plan?")) return;
+    try {
+      await planService.deletePlan(planId);
+      setPlans(plans.filter((p) => p.id !== planId));
+    } catch (error) {
+      console.error("Error deleting plan:", error);
+      alert("Failed to delete plan");
+    }
   };
 
   return (
@@ -26,7 +54,7 @@ export default function PlansPage() {
 
       {/* Plans Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {plans.map((plan) => (
+        {(loading ? [] : plans).map((plan) => (
           <div
             key={plan.id}
             className="rounded-lg border border-border bg-card p-6 flex flex-col"
@@ -49,7 +77,7 @@ export default function PlansPage() {
                   <Edit2 className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(plan)}
+                  onClick={() => handleDelete(plan.id)}
                   className="p-2 hover:bg-destructive/10 rounded-lg text-destructive transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
