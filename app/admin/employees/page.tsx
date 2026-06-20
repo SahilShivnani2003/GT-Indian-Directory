@@ -10,7 +10,7 @@ import {
   Clock,
 } from "lucide-react";
 import { DataTable } from "@/components/admin/DataTable";
-import { User } from "@/types/User";
+import { Status, User } from "@/types/User";
 import { authService } from "@/service/apis/auth.service";
 import UserFormModal from "@/components/admin/user/UserFormModal";
 
@@ -19,14 +19,26 @@ type ModalState =
   | { mode: "add" }
   | { mode: "edit"; user: User };
 
+const STATUS_STYLES: Record<Status, string> = {
+  Active:
+    "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
+  Inactive: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
+  Pending:
+    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
+  Draft: "bg-slate-100 text-slate-800 dark:bg-slate-900/20 dark:text-slate-400",
+};
+
+// API requires pagination params — bump pageSize if you need more
+// than this many employees loaded for client-side table display.
+const PAGE_NUMBER = 1;
+const PAGE_SIZE = 100;
+
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalState>({ mode: "closed" });
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "Active" | "Inactive" |  'Pending' | 'Draft'
-  >("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | Status>("all");
 
   useEffect(() => {
     fetchEmployees();
@@ -35,9 +47,13 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const response = await authService.getAllUser({ role: "Employee" });
+      const response = await authService.getAllUser({
+        role: "Employee",
+        pageNumber: PAGE_NUMBER,
+        pageSize: PAGE_SIZE,
+      });
       if (response.data?.success) {
-        setEmployees(response.data.users ?? []);
+        setEmployees(response.data.data?.data ?? []);
       } else {
         alert("Failed to fetch employees. Please try again.");
       }
@@ -66,15 +82,9 @@ export default function EmployeesPage() {
   };
 
   /** Called by UserFormModal on successful add or edit */
-  const handleModalSuccess = (savedEmployee: User) => {
-    if (modal.mode === "edit") {
-      setEmployees((prev) =>
-        prev.map((e) => (e.id === savedEmployee.id ? savedEmployee : e)),
-      );
-    } else {
-      setEmployees((prev) => [savedEmployee, ...prev]);
-    }
+  const handleModalSuccess = () => {
     setModal({ mode: "closed" });
+    fetchEmployees();
   };
 
   // Derived counts — always safe since employees is initialised to []
@@ -173,13 +183,11 @@ export default function EmployeesPage() {
           <Filter className="h-4 w-4 text-muted-foreground" />
           <select
             value={filterStatus}
-            onChange={(e) =>
-              setFilterStatus(e.target.value as "all" | "Active" | "Inactive" | "Pending" | "Draft")
-            }
+            onChange={(e) => setFilterStatus(e.target.value as "all" | Status)}
             className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="all">All Status</option>
-            <option value="Active ">Active</option>
+            <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
             <option value="Pending">Pending</option>
             <option value="Draft">Draft</option>
@@ -203,24 +211,43 @@ export default function EmployeesPage() {
               key: "status",
               label: "Status",
               width: "13%",
-              render: (value) => (
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                    value === "active"
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                      : "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
-                  }`}
-                >
-                  {(value as string).charAt(0).toUpperCase() +
-                    (value as string).slice(1)}
-                </span>
-              ),
+              render: (value) => {
+                const status = value as Status | undefined;
+                if (!status) {
+                  return (
+                    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-500">
+                      —
+                    </span>
+                  );
+                }
+                return (
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[status]}`}
+                  >
+                    {status}
+                  </span>
+                );
+              },
             },
-            { key: "createdAt", label: "Joined", width: "12%" },
+            {
+              key: "createdAt",
+              label: "Joined",
+              width: "12%",
+              render: (value) => {
+                const date = new Date(value as string);
+                return (
+                  <span>
+                    {Number.isNaN(date.getTime())
+                      ? "—"
+                      : date.toLocaleDateString()}
+                  </span>
+                );
+              },
+            },
           ]}
           data={filteredEmployees}
-          onEdit={(item) => setModal({ mode: "edit", user: item as User })}
-          onDelete={(item) => handleDelete((item as User).id)}
+          onEdit={(item) => setModal({ mode: "edit", user: item })}
+          onDelete={(item) => handleDelete(item.id)}
         />
       )}
 
@@ -230,7 +257,7 @@ export default function EmployeesPage() {
           user={modal.mode === "edit" ? modal.user : null}
           defaultRole="Employee"
           onClose={() => setModal({ mode: "closed" })}
-          onSuccess={()=>fetchEmployees()}
+          onSuccess={handleModalSuccess}
         />
       )}
     </div>

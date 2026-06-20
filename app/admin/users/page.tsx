@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { DataTable } from "@/components/admin/DataTable";
-import { User } from "@/types/User";
+import { Status, User } from "@/types/User";
 import { authService } from "@/service/apis/auth.service";
 import UserFormModal from "@/components/admin/user/UserFormModal";
 
@@ -11,6 +11,18 @@ type ModalState =
   | { mode: "closed" }
   | { mode: "add" }
   | { mode: "edit"; user: User };
+
+const STATUS_STYLES: Record<Status, string> = {
+  Active: "bg-india-green/10 text-india-green",
+  Inactive: "bg-orange-500/10 text-orange-600",
+  Pending: "bg-yellow-100 text-yellow-800",
+  Draft: "bg-gray-100 text-gray-500",
+};
+
+// API requires pagination params — bump pageSize if you need more
+// than this many users loaded for client-side table display.
+const PAGE_NUMBER = 1;
+const PAGE_SIZE = 100;
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -24,10 +36,13 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await authService.getAllUser({ role: "User" });
+      const response = await authService.getAllUser({
+        role: "User",
+        pageNumber: PAGE_NUMBER,
+        pageSize: PAGE_SIZE,
+      });
       if (response.data?.success) {
-        console.log("Fetched users:", response.data.data);
-        setUsers(response.data.data ?? []);
+        setUsers(response.data.data?.data ?? []);
       } else {
         alert("Failed to fetch users. Please try again.");
       }
@@ -124,22 +139,19 @@ export default function UsersPage() {
               width: "12%",
               render: (value) => {
                 // API may not return status — guard against undefined
-                const label = value ? String(value) : "—";
-                const isActive = value === "active";
-                const isInactive = value === "inactive";
+                const status = value as Status | undefined;
+                if (!status) {
+                  return (
+                    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-500">
+                      —
+                    </span>
+                  );
+                }
                 return (
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                      isActive
-                        ? "bg-india-green/10 text-india-green"
-                        : isInactive
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-gray-100 text-gray-500"
-                    }`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[status]}`}
                   >
-                    {label === "—"
-                      ? label
-                      : label.charAt(0).toUpperCase() + label.slice(1)}
+                    {status}
                   </span>
                 );
               },

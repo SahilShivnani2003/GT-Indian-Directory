@@ -1,23 +1,88 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, Star } from "lucide-react";
-import { getTouristPlaces } from "@/data/touristPlaces";
+import { MapPin, Star, Loader2, AlertCircle } from "lucide-react";
+import { TouristPlace } from "@/types/TouristPlaces";
+import { touristService } from "@/service/apis/tourist.service";
+
+const PAGE_SIZE = 60;
+const FILTER_OPTIONS_PAGE_SIZE = 1000;
 
 export default function TouristPlacesPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedState, setSelectedState] = useState("");
-  const touristPlaces = getTouristPlaces({
-    category: selectedCategory || undefined,
-    state: selectedState || undefined,
-  });
 
-  const categories = Array.from(
-    new Set(getTouristPlaces().map((p) => p.category)),
+  const [places, setPlaces] = useState<TouristPlace[]>([]);
+  const [filterSource, setFilterSource] = useState<TouristPlace[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch a broad, unfiltered set once on mount to populate the
+  // category/state dropdown options.
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchFilterOptions = async () => {
+      try {
+        const res = await touristService.getTouristPlaces({
+          pageNumber: 1,
+          pageSize: FILTER_OPTIONS_PAGE_SIZE,
+          status: "Active",
+        });
+        if (isMounted) setFilterSource(res.data?.data?.data);
+      } catch (err) {
+        // Non-fatal: if this fails the dropdowns are just empty, the
+        // main listing below still works.
+        console.error("Failed to load filter options", err);
+      }
+    };
+
+    fetchFilterOptions();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Fetch the filtered, paginated list whenever a filter changes.
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPlaces = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await touristService.getTouristPlaces({
+          pageNumber: 1,
+          pageSize: PAGE_SIZE,
+        });
+        console.log('response : ', res.data)
+        if (isMounted) setPlaces(res.data?.data?.data);
+      } catch (err) {
+        console.error("Failed to load tourist places", err);
+        if (isMounted) {
+          setError("Something went wrong while loading tourist places.");
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchPlaces();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCategory, selectedState]);
+
+  const categories = useMemo(
+    () => Array.from(new Set(filterSource.map((p) => p.category))).sort(),
+    [filterSource],
   );
-  const states = Array.from(new Set(getTouristPlaces().map((p) => p.state)));
+  const states = useMemo(
+    () => Array.from(new Set(filterSource.map((p) => p.state))).sort(),
+    [filterSource],
+  );
 
   return (
     <div>
@@ -81,7 +146,24 @@ export default function TouristPlacesPage() {
       {/* Tourist Places Grid */}
       <section className="py-12">
         <div className="mx-auto max-w-6xl px-4">
-          {touristPlaces.length === 0 ? (
+          {isLoading ? (
+            <div className="flex min-h-96 items-center justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Loading tourist places...</span>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="flex min-h-96 items-center justify-center rounded-lg border border-dashed border-destructive/40 bg-destructive/5">
+              <div className="text-center">
+                <AlertCircle className="mx-auto mb-4 h-12 w-12 text-destructive" />
+                <h3 className="text-lg font-semibold text-foreground">
+                  Couldn&apos;t load tourist places
+                </h3>
+                <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+              </div>
+            </div>
+          ) : places.length === 0 ? (
             <div className="flex min-h-96 items-center justify-center rounded-lg border border-dashed border-border bg-secondary/30">
               <div className="text-center">
                 <MapPin className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
@@ -95,19 +177,25 @@ export default function TouristPlacesPage() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {touristPlaces.map((place) => (
+              {places.map((place) => (
                 <div
                   key={place.id}
                   className="overflow-hidden rounded-lg border border-border bg-card transition-all hover:shadow-lg"
                 >
                   {/* Image */}
                   <div className="relative h-48 w-full overflow-hidden bg-secondary">
-                    <Image
-                      src={place.image}
-                      alt={place.name}
-                      fill
-                      className="object-cover transition-transform hover:scale-105"
-                    />
+                    {place.image ? (
+                      <Image
+                        src={place.image}
+                        alt={place.name}
+                        fill
+                        className="object-cover transition-transform hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <MapPin className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                    )}
                     {place.featured && (
                       <div className="absolute right-2 top-2 rounded-full bg-saffron px-3 py-1 text-xs font-semibold text-saffron-foreground">
                         Featured
