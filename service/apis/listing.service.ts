@@ -4,10 +4,10 @@ import { privateClient, publicClient } from "../apiClient";
 interface getListingParams {
     pageNumber: number;
     pageSize: number;
-    categoryId: string;
-    status: "Active"| "Pending"| "Rejected"| "Expired";
-    search: string;
-    isFeatured: boolean;
+    categoryId?: string;
+    status?: "Active"| "Pending"| "Rejected"| "Expired";
+    search?: string;
+    isFeatured?: boolean;
 }
 export const listingService = {
     createListing: (data: CreateListing) => privateClient.post('/Listing', data,),

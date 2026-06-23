@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, MapPin, Briefcase, DollarSign, Clock, Star } from "lucide-react";
-import { listings } from "@/data/listings";
 
 const careerSections = [
   {

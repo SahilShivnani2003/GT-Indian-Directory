@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { categories } from "@/data/categories";
 import Image from "next/image";
+import { categoryService } from "@/service/apis/category.service";
+import { Category } from "@/types/Category";
+import { useEffect, useState } from "react";
 
 const colorMap: Record<number, string> = {
   0: "bg-blue-50",
@@ -15,6 +17,28 @@ const colorMap: Record<number, string> = {
 };
 
 export default function CategoriesPage() {
+  const [categories, setCategories] = useState<Category[] | null>(null);
+
+  useEffect(()=>{
+    fetchCategories();
+  },[])
+
+  const fetchCategories = async () => {
+      try {
+        console.log("Fetching categories");
+        const response = await categoryService.getCategories({ isAcitve: true });
+        if (response.data?.success) {
+          console.log("Categories fetched successfully");
+          setCategories(response.data?.data?.data ?? []);
+        } else {
+          setCategories([]);
+        }
+      } catch (error: unknown) {
+        console.error("Failed to load category : ", error);
+        setCategories([]);
+      }
+    };
+    
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -32,11 +56,11 @@ export default function CategoriesPage() {
       {/* Grid */}
       <section className="mx-auto max-w-6xl px-4 py-8">
         <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-          {categories.length} categories
+          {categories ? categories.length : 0}  categories
         </p>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {categories.map((category, i) => (
+          {categories && categories.map((category, i) => (
             <Link
               key={category.slug}
               href={`/categories/${category.slug}`}

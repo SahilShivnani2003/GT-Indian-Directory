@@ -1,20 +1,138 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Star, ArrowRight } from "lucide-react";
+
 import { BannerCarousel } from "@/components/home/BannerCoursol";
 import { BusinessCard } from "@/components/home/BusinessCard";
 import { CategoryCard } from "@/components/home/CategoryCard";
 import { HeroBanner } from "@/components/home/HeroBanner";
 import { SearchBar } from "@/components/home/SearchBar";
-import { banners } from "@/data/banners";
-import { categories } from "@/data/categories";
-import { getFeaturedListing, listings } from "@/data/listings";
-import { getCitiesByCountry } from "@/utils/getCitites";
-import { Star, ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { bannerService } from "@/service/apis/banner.service";
+import { categoryService } from "@/service/apis/category.service";
+import { listingService } from "@/service/apis/listing.service";
+import { stateService } from "@/service/apis/state.service";
+import { Banner } from "@/types/Banner";
+import { Category } from "@/types/Category";
+import { City } from "@/types/CityState";
+import { Listing } from "@/types/Listing";
 
-export default async function HomePage() {
-  const featured = getFeaturedListing();
-  const allActive = listings.filter((l) => l.status === "active");
-  //const cities = await getCitiesByCountry();
-  const cities: {id: number; name: string}[] = [];
+// Simple skeleton block, reuses existing design tokens
+function Skeleton({ className = "" }: { className?: string }) {
+  return (
+    <div className={`animate-pulse rounded-lg bg-secondary ${className}`} />
+  );
+}
+
+export default function HomePage() {
+  const [cities, setCities] = useState<City[] | null>(null);
+  const [banners, setBanners] = useState<Banner[] | null>(null);
+  const [listings, setListings] = useState<Listing[] | null>(null); // featured
+  const [allListings, setAllListings] = useState<Listing[] | null>(null); // all active
+  const [categories, setCategories] = useState<Category[] | null>(null);
+
+  useEffect(() => {
+    fetchCity();
+    fetchBanners();
+    fetchListings();
+    fetchAllListings();
+    fetchCategories();
+  }, []);
+
+  const fetchCity = async () => {
+    try {
+      console.log("Fetching cities");
+      const response = await stateService.getCities("MP");
+      if (response.data?.success) {
+        console.log("cities fetched successfully.");
+        setCities(response.data?.data);
+      } else {
+        setCities([]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to fetch cities : ", error);
+      setCities([]);
+    }
+  };
+
+  const fetchBanners = async () => {
+    try {
+      console.log("Fetching banners");
+      const response = await bannerService.getBanners({
+        pageNumber: 1,
+        pageSize: 10,
+        IsRunning: true,
+        IsActive: true,
+      });
+      if (response.data?.success) {
+        console.log("Banners fetched successfully");
+        setBanners(response.data?.data?.data ?? []);
+      } else {
+        setBanners([]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to load banner : ", error);
+      setBanners([]);
+    }
+  };
+
+  const fetchListings = async () => {
+    try {
+      console.log("Fetching featured listings");
+      const response = await listingService.getListing({
+        pageNumber: 1,
+        pageSize: 10,
+        isFeatured: true,
+        status: "Active",
+      });
+      if (response.data?.success) {
+        console.log("Featured listings fetched successfully");
+        setListings(response.data?.data?.data ?? []);
+      } else {
+        setListings([]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to fetch featured listings : ", error);
+      setListings([]);
+    }
+  };
+
+  const fetchAllListings = async () => {
+    try {
+      console.log("Fetching all listings");
+      const response = await listingService.getListing({
+        pageNumber: 1,
+        pageSize: 50,
+        status: "Active",
+      });
+      if (response.data?.success) {
+        console.log("All listings fetched successfully");
+        setAllListings(response.data?.data?.data ?? []);
+      } else {
+        setAllListings([]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to fetch all listings : ", error);
+      setAllListings([]);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      console.log("Fetching categories");
+      const response = await categoryService.getCategories({ isAcitve: true });
+      if (response.data?.success) {
+        console.log("Categories fetched successfully");
+        setCategories(response.data?.data?.data ?? []);
+      } else {
+        setCategories([]);
+      }
+    } catch (error: unknown) {
+      console.error("Failed to load category : ", error);
+      setCategories([]);
+    }
+  };
 
   return (
     <div>
@@ -28,7 +146,11 @@ export default async function HomePage() {
             Connect with verified professionals and services in your area
           </p>
           <div className="mt-8 flex justify-center">
-            <SearchBar cities={cities} />
+            {cities ? (
+              <SearchBar cities={cities} />
+            ) : (
+              <Skeleton className="h-12 w-full max-w-md" />
+            )}
           </div>
         </div>
       </section>
@@ -39,7 +161,13 @@ export default async function HomePage() {
 
         {/* Banner Carousel */}
         <div className="mt-10">
-          <BannerCarousel banners={banners} />
+          {banners ? (
+            banners.length > 0 ? (
+              <BannerCarousel banners={banners} />
+            ) : null
+          ) : (
+            <Skeleton className="h-40 w-full" />
+          )}
         </div>
 
         {/* Featured Businesses */}
@@ -56,9 +184,19 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {featured?.map((listing) => (
-              <BusinessCard key={listing.id} listing={listing} />
-            ))}
+            {listings === null ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-48 w-full" />
+              ))
+            ) : listings.length > 0 ? (
+              listings.map((listing) => (
+                <BusinessCard key={listing.id} listing={listing} />
+              ))
+            ) : (
+              <p className="col-span-full text-sm text-muted-foreground">
+                No featured businesses right now. Check back soon.
+              </p>
+            )}
           </div>
         </section>
 
@@ -82,9 +220,21 @@ export default async function HomePage() {
             </Link>
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {categories.slice(0, 12).map((category) => (
-              <CategoryCard key={category.id} category={category} />
-            ))}
+            {categories === null ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full" />
+              ))
+            ) : categories.length > 0 ? (
+              categories
+                .slice(0, 12)
+                .map((category) => (
+                  <CategoryCard key={category.id} category={category} />
+                ))
+            ) : (
+              <p className="col-span-full text-sm text-muted-foreground">
+                No categories available.
+              </p>
+            )}
           </div>
         </section>
 
@@ -96,7 +246,9 @@ export default async function HomePage() {
                 All Businesses
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {allActive.length} listings found
+                {allListings === null
+                  ? "Loading listings…"
+                  : `${allListings.length} listings found`}
               </p>
             </div>
             <Link
@@ -108,11 +260,23 @@ export default async function HomePage() {
             </Link>
           </div>
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {allActive.slice(0, 6).map((listing) => (
-              <BusinessCard key={listing.id} listing={listing} />
-            ))}
+            {allListings === null ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-48 w-full" />
+              ))
+            ) : allListings.length > 0 ? (
+              allListings
+                .slice(0, 6)
+                .map((listing) => (
+                  <BusinessCard key={listing.id} listing={listing} />
+                ))
+            ) : (
+              <p className="col-span-full text-sm text-muted-foreground">
+                No businesses found yet.
+              </p>
+            )}
           </div>
-          {allActive.length > 6 && (
+          {allListings && allListings.length > 6 && (
             <div className="mt-8 flex justify-center">
               <Link
                 href="/listings"

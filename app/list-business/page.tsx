@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { CheckCircle, ArrowRight } from "lucide-react";
-import { categories } from "@/data/categories";
-import { cities, states } from "@/data/cityState";
+import { CheckCircle, ArrowRight, Loader2 } from "lucide-react";
+import { Category } from "@/types/Category";
+import { City, State } from "@/types/CityState";
+import { stateService } from "@/service/apis/state.service";
+import { categoryService } from "@/service/apis/category.service";
+import { listingService } from "@/service/apis/listing.service";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function slugify(name: string) {
   return name
@@ -14,6 +19,8 @@ function slugify(name: string) {
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
+// ── Form shape ───────────────────────────────────────────────────────────────
 
 interface FormData {
   // Step 1 – Business Info
@@ -30,8 +37,9 @@ interface FormData {
   addressLine2: string;
   area: string;
   district: string;
-  city: string;
-  state: string;
+  cityId: string;
+  stateId: string;
+  stateIso2: string; // stored so we can pass iso2 to the cities API
   pinCode: string;
   // Step 3 – Details
   businessHours: string;
@@ -52,41 +60,148 @@ const INITIAL: FormData = {
   addressLine2: "",
   area: "",
   district: "",
-  city: "",
-  state: "",
+  cityId: "",
+  stateId: "",
+  stateIso2: "",
   pinCode: "",
   businessHours: "",
   yearEstablished: "",
   images: null,
 };
 
+// ── Shared class strings ──────────────────────────────────────────────────────
+
+const inputCls =
+  "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50";
+
+const selectCls =
+  "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50";
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function ListBusinessPage() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<FormData>(INITIAL);
+
+  // Remote data
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [states, setStates] = useState<State[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+
+  // Loading flags
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
+
+  // ── Fetch states + categories on mount ─────────────────────────────────────
+  useEffect(() => {
+    fetchStates();
+    fetchCategories();
+  }, []);
+
+  // ── Fetch cities whenever the selected state changes ────────────────────────
+  useEffect(() => {
+    if (form.stateIso2) {
+      fetchCities(form.stateIso2);
+    } else {
+      setCities([]);
+    }
+  }, [form.stateIso2]);
+
+  // ── Data fetchers ───────────────────────────────────────────────────────────
+
+  async function fetchStates() {
+    setLoadingStates(true);
+    try {
+      const response = await stateService.getStates("IN");
+      if (response.data?.success) {
+        setStates(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch states:", error);
+    } finally {
+      setLoadingStates(false);
+    }
+  }
+
+  async function fetchCities(iso2: string) {
+    setLoadingCities(true);
+    setCities([]); // clear stale cities immediately
+    try {
+      // Pass iso2 so the API knows which state's cities to return
+      const response = await stateService.getCities(iso2);
+      if (response.data?.success) {
+        setCities(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch cities:", error);
+    } finally {
+      setLoadingCities(false);
+    }
+  }
+
+  async function fetchCategories() {
+    setLoadingCategories(true);
+    try {
+      const response = await categoryService.getCategories({ isAcitve: true });
+      if (response.data?.success) {
+        setCategories(response.data.data?.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch categories:", error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }
+
+  // ── Form helpers ────────────────────────────────────────────────────────────
 
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function handleBusinessNameChange(name: string) {
-    set("businessName", name);
-    set("slug", slugify(name));
+    setForm((prev) => ({ ...prev, businessName: name, slug: slugify(name) }));
   }
 
   function handleCategoryChange(id: string) {
     const cat = categories.find((c) => c.id === id);
-    set("categoryId", id);
-    set("categoryName", cat?.name ?? "");
+    setForm((prev) => ({
+      ...prev,
+      categoryId: id,
+      categoryName: cat?.name ?? "",
+    }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  /**
+   * When the user picks a state we store both the state id (for the form
+   * payload) and the iso2 code (to pass to the cities API). We also clear
+   * the previously selected city so the dropdown resets.
+   */
+  function handleStateChange(stateId: string) {
+    const selectedState = states.find((s) => s.id === stateId);
+    setForm((prev) => ({
+      ...prev,
+      stateId,
+      stateIso2: selectedState?.iso2 ?? "",
+      cityId: "", // reset city when state changes
+    }));
+  }
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     if (step < 3) {
-      setStep(step + 1);
-    } else {
-      // Build payload matching the Listing interface (server sets id, createdAt, status,
-      // featured, verified, viewCount, rating, reviewCount)
+      setStep((s) => s + 1);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
       const payload = {
         businessName: form.businessName,
         slug: form.slug,
@@ -100,15 +215,26 @@ export default function ListBusinessPage() {
         addressLine2: form.addressLine2 || undefined,
         area: form.area,
         district: form.district,
-        city: form.city,
-        state: form.state,
+        city: form.cityId,
+        state: form.stateId,
         pinCode: form.pinCode,
-        // images would be uploaded separately and URLs stored in images[]
+        images: [] as string[],
+        // images[] – upload files separately, then push the returned URLs here
       };
-      console.log("Submit payload:", payload);
-      setSubmitted(true);
+
+      const response = await listingService.createListing(payload);
+      if (response.data?.success) {
+        setSubmitted(true);
+      }
+    } catch (error) {
+      console.error("Failed to create listing:", error);
+      // TODO: surface an error toast/alert to the user
+    } finally {
+      setSubmitting(false);
     }
   }
+
+  // ── Success screen ──────────────────────────────────────────────────────────
 
   if (submitted) {
     return (
@@ -143,13 +269,11 @@ export default function ListBusinessPage() {
     );
   }
 
-  const inputCls =
-    "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
-  const selectCls =
-    "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+  // ── Main render ─────────────────────────────────────────────────────────────
 
   return (
     <>
+      {/* Header + step indicator */}
       <section className="border-b border-border bg-card py-10">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h1 className="text-2xl font-bold text-foreground md:text-3xl">
@@ -159,12 +283,11 @@ export default function ListBusinessPage() {
             Get your business discovered by thousands of potential customers
           </p>
 
-          {/* Step indicator */}
           <div className="mt-8 flex items-center justify-center gap-2">
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                     s <= step
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
@@ -183,7 +306,9 @@ export default function ListBusinessPage() {
                 </span>
                 {s < 3 && (
                   <div
-                    className={`h-0.5 w-8 sm:w-16 ${s < step ? "bg-primary" : "bg-muted"}`}
+                    className={`h-0.5 w-8 transition-colors sm:w-16 ${
+                      s < step ? "bg-primary" : "bg-muted"
+                    }`}
                   />
                 )}
               </div>
@@ -204,6 +329,7 @@ export default function ListBusinessPage() {
                 Business Information
               </h2>
 
+              {/* Business name */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground">
                   Business Name *
@@ -218,11 +344,11 @@ export default function ListBusinessPage() {
                 />
               </div>
 
-              {/* Auto-generated slug – read-only preview */}
+              {/* Auto-generated slug preview */}
               {form.slug && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
-                    Listing URL slug
+                    Listing URL
                   </label>
                   <div className="flex h-11 items-center rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground">
                     /listings/
@@ -234,24 +360,37 @@ export default function ListBusinessPage() {
               )}
 
               <div className="grid gap-5 sm:grid-cols-2">
+                {/* Category dropdown */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     Category *
                   </label>
-                  <select
-                    value={form.categoryId}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                    className={selectCls}
-                    required
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
+                  <div className="relative">
+                    <select
+                      value={form.categoryId}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      className={selectCls}
+                      required
+                      disabled={loadingCategories}
+                    >
+                      <option value="">
+                        {loadingCategories
+                          ? "Loading categories…"
+                          : "Select category"}
                       </option>
-                    ))}
-                  </select>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingCategories && (
+                      <Loader2 className="pointer-events-none absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
+
+                {/* Contact */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     Contact Number *
@@ -303,7 +442,7 @@ export default function ListBusinessPage() {
                   rows={4}
                   value={form.description}
                   onChange={(e) => set("description", e.target.value)}
-                  placeholder="Describe your business, services, and what makes you unique..."
+                  placeholder="Describe your business, services, and what makes you unique…"
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                   required
                 />
@@ -375,46 +514,64 @@ export default function ListBusinessPage() {
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
+                {/* State dropdown */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     State *
                   </label>
-                  <select
-                    value={form.state}
-                    onChange={(e) => {
-                      set("state", e.target.value);
-                      set("city", ""); 
-                    }}
-                    className={selectCls}
-                    required
-                  >
-                    <option value="">Select state</option>
-                    {states.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
+                  <div className="relative">
+                    <select
+                      value={form.stateId}
+                      onChange={(e) => handleStateChange(e.target.value)}
+                      className={selectCls}
+                      required
+                      disabled={loadingStates}
+                    >
+                      <option value="">
+                        {loadingStates ? "Loading states…" : "Select state"}
                       </option>
-                    ))}
-                  </select>
+                      {states.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingStates && (
+                      <Loader2 className="pointer-events-none absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
+
+                {/* City dropdown – enabled only after a state is selected */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     City *
                   </label>
-                  <select
-                    value={form.city}
-                    onChange={(e) => set("city", e.target.value)}
-                    className={selectCls}
-                    required
-                  >
-                    {(form.state
-                      ? cities.filter((c) => c.stateId === form.state)
-                      : cities
-                    ).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
+                  <div className="relative">
+                    <select
+                      value={form.cityId}
+                      onChange={(e) => set("cityId", e.target.value)}
+                      className={selectCls}
+                      required
+                      disabled={!form.stateId || loadingCities}
+                    >
+                      <option value="">
+                        {!form.stateId
+                          ? "Select a state first"
+                          : loadingCities
+                            ? "Loading cities…"
+                            : "Select city"}
                       </option>
-                    ))}
-                  </select>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingCities && (
+                      <Loader2 className="pointer-events-none absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -466,12 +623,11 @@ export default function ListBusinessPage() {
                   onChange={(e) => set("yearEstablished", e.target.value)}
                   placeholder="e.g., 2015"
                   min={1900}
-                  max={2026}
+                  max={new Date().getFullYear()}
                   className={inputCls}
                 />
               </div>
 
-              {/* images[] – up to 3 on free plan */}
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">
                   Upload Business Images
@@ -482,7 +638,7 @@ export default function ListBusinessPage() {
                       Drag and drop images here, or click to browse
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      PNG, JPG up to 5 MB each. Maximum 3 images on free plan.
+                      PNG, JPG up to 5 MB each · Maximum 3 images on free plan
                     </p>
                     <input
                       type="file"
@@ -501,7 +657,6 @@ export default function ListBusinessPage() {
                 )}
               </div>
 
-              {/* Read-only system fields notice */}
               <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
                 After submission your listing will have{" "}
                 <span className="font-medium text-foreground">
@@ -552,20 +707,32 @@ export default function ListBusinessPage() {
             {step > 1 ? (
               <button
                 type="button"
-                onClick={() => setStep(step - 1)}
-                className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-secondary"
+                onClick={() => setStep((s) => s - 1)}
+                disabled={submitting}
+                className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50"
               >
                 Previous
               </button>
             ) : (
               <div />
             )}
+
             <button
               type="submit"
-              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              disabled={submitting}
+              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
             >
-              {step < 3 ? "Continue" : "Submit Listing"}
-              <ArrowRight className="h-4 w-4" />
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  {step < 3 ? "Continue" : "Submit Listing"}
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </button>
           </div>
         </form>

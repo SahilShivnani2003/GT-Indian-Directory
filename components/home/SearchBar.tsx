@@ -3,9 +3,10 @@
 import {  useState } from "react"
 import { useRouter } from "next/navigation"
 import { Search, MapPin, ChevronDown } from "lucide-react"
+import { City } from "@/types/CityState"
 
 type searchProps = {
-  cities : { id: number; name: string }[];
+  cities : City[];
 }
 export function SearchBar({ cities }: searchProps) {
   const router = useRouter()
