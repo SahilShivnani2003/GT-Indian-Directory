@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { ArrowRight, CheckCircle, HelpCircle, Check } from "lucide-react";
-import { plans } from "@/data/plans";
 import { cn } from "@/utils/cn";
+import { useEffect, useState } from "react";
+import { Plan } from "@/types/Plan";
+import { planService } from "@/service/apis/plans.service";
 
 const faqs = [
   {
@@ -34,6 +36,24 @@ const faqs = [
 ];
 
 export default function PricingPage() {
+  const [plans, setPlans] = useState<Plan[] | null>(null);
+
+  useEffect(()=>{
+    fetchPlans();
+  },[])
+  const fetchPlans = async() =>{
+    try{
+
+      console.log('Fetching plans')
+      const response = await planService.getActivePlans();
+      if(response.data?.success){
+        console.log('Plans fetched successfully');
+        setPlans(response.data?.data);
+      }
+    }catch(error){
+      console.error('Error while fetching plans : ', error);
+    }
+  }
   return (
     <>
       {/* Hero */}
@@ -51,7 +71,7 @@ export default function PricingPage() {
       {/* Plans Grid */}
       <section className="mx-auto max-w-7xl px-4 py-12">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {plans
+          {plans && plans
             .filter((plan) => plan.isActive)
             .map((plan) => (
               <div

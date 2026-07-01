@@ -1,18 +1,39 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Edit2, Eye, Trash2, Search, Filter, MoreVertical } from "lucide-react";
-import { listings } from "@/data/listings";
+import { useState, useEffect } from "react";
+import { Plus, Edit2, Eye, Trash2, Search, Filter } from "lucide-react";
 import { Listing } from "@/types/Listing";
 import Link from "next/link";
+import { listingService } from "@/service/apis/listing.service";
 
 export default function EmployeeListingsPage() {
-  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive" | "pending">("all");
+  const [filterStatus, setFilterStatus] = useState<
+    "all" | "active" | "inactive" | "pending"
+  >("all");
+  const [employeeListings, setEmployeeListings] = useState<Listing[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock - in real app, filter by employee
-  const employeeListings = listings.slice(0, 8);
+  const fetchListing = async () => {
+    try {
+      setIsLoading(true);
+      const response = await listingService.getListing({
+        pageNumber: 1,
+        pageSize: 8,
+      });
+      if (response.data?.success) {
+        setEmployeeListings(response.data?.data?.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch listings: ", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchListing();
+  }, []);
 
   const filteredListings = employeeListings.filter((listing) => {
     const matchesSearch =
@@ -21,18 +42,17 @@ export default function EmployeeListingsPage() {
 
     let matchesStatus = true;
     if (filterStatus === "active") matchesStatus = listing.status === "active";
-    if (filterStatus === "inactive") matchesStatus = listing.status !== "active";
+    if (filterStatus === "inactive")
+      matchesStatus = listing.status !== "active";
     if (filterStatus === "pending") matchesStatus = !listing.verified;
 
     return matchesSearch && matchesStatus;
   });
 
   const activeListings = employeeListings.filter(
-    (l) => l.status === "active"
+    (l) => l.status === "active",
   ).length;
-  const verifiedListings = employeeListings.filter(
-    (l) => l.verified
-  ).length;
+  const verifiedListings = employeeListings.filter((l) => l.verified).length;
   const totalViews = employeeListings.reduce((sum, l) => sum + l.viewCount, 0);
 
   return (
@@ -58,19 +78,27 @@ export default function EmployeeListingsPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Listings</p>
-          <p className="mt-2 text-3xl font-bold text-foreground">{employeeListings.length}</p>
+          <p className="mt-2 text-3xl font-bold text-foreground">
+            {employeeListings.length}
+          </p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Active</p>
-          <p className="mt-2 text-3xl font-bold text-green-600">{activeListings}</p>
+          <p className="mt-2 text-3xl font-bold text-green-600">
+            {activeListings}
+          </p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Verified</p>
-          <p className="mt-2 text-3xl font-bold text-blue-600">{verifiedListings}</p>
+          <p className="mt-2 text-3xl font-bold text-blue-600">
+            {verifiedListings}
+          </p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Views</p>
-          <p className="mt-2 text-3xl font-bold text-purple-600">{totalViews}</p>
+          <p className="mt-2 text-3xl font-bold text-purple-600">
+            {totalViews}
+          </p>
         </div>
       </div>
 
@@ -128,9 +156,21 @@ export default function EmployeeListingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredListings.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-6 py-8 text-center text-muted-foreground"
+                  >
+                    Loading listings...
+                  </td>
+                </tr>
+              ) : filteredListings.length > 0 ? (
                 filteredListings.map((listing) => (
-                  <tr key={listing.id} className="hover:bg-secondary/50 transition-colors">
+                  <tr
+                    key={listing.id}
+                    className="hover:bg-secondary/50 transition-colors"
+                  >
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-medium text-foreground">
@@ -181,7 +221,10 @@ export default function EmployeeListingsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                  <td
+                    colSpan={6}
+                    className="px-6 py-8 text-center text-muted-foreground"
+                  >
                     No listings found matching your filters
                   </td>
                 </tr>

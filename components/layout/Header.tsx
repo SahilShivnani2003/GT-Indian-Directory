@@ -16,8 +16,9 @@ import {
   User,
   ChevronRight,
 } from "lucide-react";
-import { categories } from "@/data/categories";
 import { useAuthStore } from "@/store/useAuthStore";
+import { Category } from "@/types/Category";
+import { categoryService } from "@/service/apis/category.service";
 
 const navLinks = [
   { href: "/listings", label: "Listings", icon: ShoppingBag },
@@ -31,6 +32,7 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[] | null>(null);
 
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -48,8 +50,21 @@ export function Header() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+    fetchCategories();
   }, []);
 
+  const fetchCategories = async() =>{
+    try{
+      console.log('Fetching categories.');
+      const response = await categoryService.getCategories({isAcitve: true});
+      if(response.data?.success){
+        console.log('category fetched successfully. ');
+        setCategories(response.data?.data?.data);
+      }
+    }catch(error){
+      console.error('Failed to fetch categories : ', error);
+    }
+  }
   const getDashboardHref = () => {
     switch (user?.role) {
       case "Admin":
@@ -134,7 +149,7 @@ export function Header() {
                   onClick={() => setCatOpen(false)}
                 />
                 <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-border bg-card p-2 shadow-lg">
-                  {categories.slice(0, 10).map((cat) => (
+                  {categories && categories.slice(0, 10).map((cat) => (
                     <Link
                       key={cat.id}
                       href={`/categories/${cat.slug}`}

@@ -8,7 +8,6 @@ import { planService } from "@/service/apis/plans.service";
 import { authService } from "@/service/apis/auth.service";
 import { Listing } from "@/types/Listing";
 import { Plan } from "@/types/Plan";
-import { User } from "@/types/User";
 import {
   ShoppingBag,
   Users,
@@ -146,9 +145,9 @@ export default function AdminDashboard() {
         </div>
         <DataTable
           columns={[
-            { key: "name", label: "Business Name", width: "35%" },
+            { key: "businessName", label: "Business Name", width: "35%" },
             {
-              key: "category",
+              key: "categoryName",
               label: "Category",
               render: (value) => (
                 <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
@@ -161,7 +160,7 @@ export default function AdminDashboard() {
               label: "Location",
             },
             {
-              key: "verified",
+              key: "status",
               label: "Status",
               render: (value) => (
                 <span
@@ -199,9 +198,9 @@ export default function AdminDashboard() {
         </div>
         <DataTable
           columns={[
-            { key: "name", label: "Business Name", width: "35%" },
+            { key: "businessName", label: "Business Name", width: "35%" },
             {
-              key: "category",
+              key: "categoryName",
               label: "Category",
               render: (value) => (
                 <span className="inline-flex items-center rounded-full bg-saffron/10 px-2.5 py-1 text-xs font-medium text-saffron">

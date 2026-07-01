@@ -2,12 +2,41 @@
 
 import Link from "next/link";
 import { Search, Star, ShoppingCart } from "lucide-react";
-import { useState } from "react";
-import { products } from "@/data/products";
+import { useEffect, useState } from "react";
+import { Product } from "@/types/Product";
+import { productService } from "@/service/apis/product.service";
 
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await productService.getProducts({
+        pageNumber: 1,
+        pageSize: 50,
+      });
+
+      // Adjust this line to match your API's actual response shape.
+      // Common shapes: response.data, response.data.items, response.data.data
+      const data: Product[] = response.data?.items ?? response.data ?? [];
+      setProducts(data);
+    } catch (error) {
+      console.error("Failed to fetch products: ", error);
+      setError("Failed to load products. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
@@ -19,7 +48,8 @@ export default function ProductsPage() {
   });
 
   const categories = ["all", ...new Set(products.map((p) => p.category))];
-  const discountPercent = (prod: (typeof products)[0]) =>
+
+  const discountPercent = (prod: Product) =>
     prod.discountPrice
       ? Math.round(((prod.price - prod.discountPrice) / prod.price) * 100)
       : 0;
@@ -42,7 +72,6 @@ export default function ProductsPage() {
       <section className="border-b border-border bg-card">
         <div className="mx-auto max-w-6xl px-4 py-8">
           <div className="flex flex-col gap-6">
-            {/* Search Bar */}
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -56,7 +85,6 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            {/* Category Filter */}
             <div className="flex flex-wrap gap-2">
               {categories.map((cat) => (
                 <button
@@ -79,7 +107,21 @@ export default function ProductsPage() {
       {/* Products Grid */}
       <section className="bg-background py-12">
         <div className="mx-auto max-w-6xl px-4">
-          {filteredProducts.length === 0 ? (
+          {loading ? (
+            <div className="py-12 text-center">
+              <p className="text-muted-foreground">Loading products...</p>
+            </div>
+          ) : error ? (
+            <div className="py-12 text-center">
+              <p className="text-destructive">{error}</p>
+              <button
+                onClick={fetchProducts}
+                className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                Retry
+              </button>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground">
                 No products found. Try adjusting your filters.
@@ -100,7 +142,6 @@ export default function ProductsPage() {
                     href={`/products/${product.slug}`}
                     className="group rounded-lg border border-border bg-card transition-all hover:border-primary hover:shadow-lg"
                   >
-                    {/* Product Image */}
                     <div className="relative h-48 w-full overflow-hidden bg-secondary">
                       <img
                         src={product.images[0]}
@@ -119,19 +160,15 @@ export default function ProductsPage() {
                       )}
                     </div>
 
-                    {/* Product Info */}
                     <div className="p-4">
-                      {/* Business Name */}
                       <p className="text-xs font-medium text-muted-foreground">
                         {product.businessName}
                       </p>
 
-                      {/* Product Name */}
                       <h3 className="mt-1 line-clamp-2 text-sm font-bold text-foreground group-hover:text-primary">
                         {product.name}
                       </h3>
 
-                      {/* Rating */}
                       <div className="mt-2 flex items-center gap-1">
                         <div className="flex items-center">
                           {[...Array(5)].map((_, i) => (
@@ -150,7 +187,6 @@ export default function ProductsPage() {
                         </span>
                       </div>
 
-                      {/* Price */}
                       <div className="mt-3 flex items-center gap-2">
                         <span className="text-lg font-bold text-foreground">
                           ₹{product.discountPrice || product.price}
@@ -162,7 +198,6 @@ export default function ProductsPage() {
                         )}
                       </div>
 
-                      {/* Add to Cart Button */}
                       <button
                         onClick={(e) => {
                           e.preventDefault();

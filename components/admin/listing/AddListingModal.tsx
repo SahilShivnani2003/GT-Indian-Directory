@@ -5,6 +5,10 @@ import { Plus, X, Upload, Loader2 } from "lucide-react";
 import { listingService } from "@/service/apis/listing.service";
 import { CreateListing } from "@/types/Listing";
 import { imageService } from "@/service/apis/image.service";
+import { Category } from "@/types/Category";
+import { City, State } from "@/types/CityState";
+import { categoryService } from "@/service/apis/category.service";
+import { stateService } from "@/service/apis/state.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +40,8 @@ const EMPTY_FORM: CreateListing = {
 
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow";
+
+const selectCls = `${inputCls} disabled:cursor-not-allowed disabled:opacity-60`;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -86,19 +92,84 @@ export function AddListingModal({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset form each time the modal opens
+  // Dropdown data
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [states, setStates] = useState<State[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+
+  // Loading flags
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
+
+  // The state dropdown stores a name in form.state (for submission) but we
+  // need the iso code separately to look up cities for that state.
+  const [selectedStateIso, setSelectedStateIso] = useState("");
+
+  // ── Data fetchers ──
+
+  const fetchCategories = async () => {
+    setLoadingCategories(true);
+    try {
+      const response = await categoryService.getCategories({ isAcitve: true });
+      if (response.data?.success) {
+        setCategories(response.data?.data?.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch categories: ", error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
+  const fetchStates = async () => {
+    setLoadingStates(true);
+    try {
+      const response = await stateService.getStates("IN");
+      if (response.data?.success) {
+        setStates(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch states:", error);
+    } finally {
+      setLoadingStates(false);
+    }
+  };
+
+  const fetchCities = async (iso2: string) => {
+    setLoadingCities(true);
+    setCities([]); 
+    try {
+      const response = await stateService.getCities(iso2);      
+      if (response.data?.success) {
+        setCities(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch cities:", error);
+    } finally {
+      setLoadingCities(false);
+    }
+  };
+
+  // Reset form + dropdown state each time the modal opens, and load the
+  // category/state lists.
   useEffect(() => {
     if (open) {
       setForm(EMPTY_FORM);
       setErrors({});
       setImagePreviews([]);
       setImageFiles([]);
+      setSelectedStateIso("");
+      setCities([]);
+      fetchCategories();
+      fetchStates();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // IMPORTANT: all hooks must run on every render, so the early return
+  // happens after every useState/useEffect declaration above.
   if (!open) return null;
-
-  // ── Helpers ──
 
   const setField =
     (key: keyof CreateListing) =>
@@ -106,6 +177,44 @@ export function AddListingModal({
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
       setErrors((prev) => ({ ...prev, [key]: undefined }));
     };
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const categoryId = e.target.value;
+    const selected = categories.find((c) => c.id === categoryId);
+    setForm((prev) => ({
+      ...prev,
+      categoryId,
+      categoryName: selected?.name ?? "",
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      categoryId: undefined,
+      categoryName: undefined,
+    }));
+  };
+
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const iso2 = e.target.value;
+    const selected = states.find((s) => s.iso2 === iso2);
+
+    setSelectedStateIso(iso2);
+    setForm((prev) => ({
+      ...prev,
+      state: selected?.name ?? "",
+      city: "", // reset city whenever state changes
+    }));
+    setErrors((prev) => ({ ...prev, state: undefined, city: undefined }));
+    setCities([]);
+    debugger
+    if (iso2) {
+      fetchCities(iso2);
+    }
+  };
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setForm((prev) => ({ ...prev, city: e.target.value }));
+    setErrors((prev) => ({ ...prev, city: undefined }));
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -304,27 +413,31 @@ export function AddListingModal({
             <section>
               <SectionHeading>Category</SectionHeading>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Category ID" required error={errors.categoryId}>
-                  <input
-                    className={inputCls}
-                    placeholder="e.g. cat_electronics"
-                    value={form.categoryId}
-                    onChange={setField("categoryId")}
-                  />
-                </Field>
-
-                <Field
-                  label="Category Name"
-                  required
-                  error={errors.categoryName}
-                >
-                  <input
-                    className={inputCls}
-                    placeholder="e.g. Electronics"
-                    value={form.categoryName}
-                    onChange={setField("categoryName")}
-                  />
-                </Field>
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Category"
+                    required
+                    error={errors.categoryId ?? errors.categoryName}
+                  >
+                    <select
+                      className={selectCls}
+                      value={form.categoryId}
+                      onChange={handleCategoryChange}
+                      disabled={loadingCategories}
+                    >
+                      <option value="">
+                        {loadingCategories
+                          ? "Loading categories…"
+                          : "Select a category"}
+                      </option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
               </div>
             </section>
 
@@ -376,22 +489,44 @@ export function AddListingModal({
                   />
                 </Field>
 
-                <Field label="City" required error={errors.city}>
-                  <input
-                    className={inputCls}
-                    placeholder="e.g. New Delhi"
-                    value={form.city}
-                    onChange={setField("city")}
-                  />
+                <Field label="State" required error={errors.state}>
+                  <select
+                    className={selectCls}
+                    value={selectedStateIso}
+                    onChange={handleStateChange}
+                    disabled={loadingStates}
+                  >
+                    <option value="">
+                      {loadingStates ? "Loading states…" : "Select a state"}
+                    </option>
+                    {states.map((s) => (
+                      <option key={s.iso2} value={s.iso2}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
 
-                <Field label="State" required error={errors.state}>
-                  <input
-                    className={inputCls}
-                    placeholder="e.g. Delhi"
-                    value={form.state}
-                    onChange={setField("state")}
-                  />
+                <Field label="City" required error={errors.city}>
+                  <select
+                    className={selectCls}
+                    value={form.city}
+                    onChange={handleCityChange}
+                    disabled={!selectedStateIso || loadingCities}
+                  >
+                    <option value="">
+                      {!selectedStateIso
+                        ? "Select a state first"
+                        : loadingCities
+                          ? "Loading cities…"
+                          : "Select a city"}
+                    </option>
+                    {cities.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
 
                 <Field label="PIN Code" required error={errors.pinCode}>

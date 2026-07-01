@@ -36,9 +36,8 @@ function ListingsContent() {
         const response = await listingService.getListing({
           pageNumber: 1,
           pageSize: 10,
-          isFeatured: true,
+          isFeatured: false,
           status: "Active",
-          // Pass search params so the API can filter server-side
           ...(query && { search: query }),
           ...(category && { categorySlug: category }),
           ...(location && location !== "all" && { location }),
@@ -84,15 +83,9 @@ function ListingsContent() {
   useEffect(() => {
     const fetchCities = async () => {
       try {
-        const statesRes = await stateService.getStates("IN");
-        if (!statesRes.data?.success) return;
-
-        const states: State[] = statesRes.data.data ?? [];
-        const cityResults = await Promise.all(
-          states.map((s) => stateService.getCities(s.iso2)),
-        );
-        const allCities = cityResults.flatMap((r) => r.data?.data ?? []);
-        setCities(allCities);
+        const cityRes = await stateService.getCities("MP");
+        if (!cityRes.data?.success) return;       
+        setCities(cityRes.data?.data);
       } catch (error) {
         console.error("Failed to fetch cities:", error);
       }

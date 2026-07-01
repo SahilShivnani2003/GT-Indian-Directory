@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   TrendingUp,
   Eye,
@@ -11,20 +11,43 @@ import {
   Building2,
   BarChart3,
 } from "lucide-react";
-import { listings } from "@/data/listings";
 import Link from "next/link";
+import { listingService } from "@/service/apis/listing.service";
+import { Listing } from "@/types/Listing";
 
 export default function EmployeeDashboard() {
   const [timeframe, setTimeframe] = useState("month");
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchListings();
+  }, []);
+
+  const fetchListings = async () => {
+    try {
+      setIsLoading(true);
+      const response = await listingService.getListing({
+        pageNumber: 1,
+        pageSize: 6,
+      });
+      if (response.data?.success) {
+        setListings(response.data?.data?.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to load listings: ", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Mock data - in real app, fetch from backend
-  const employeeListings = listings.slice(0, 5);
   const totalViews = 4550;
   const previousViews = 3200;
   const totalLeads = 127;
   const previousLeads = 98;
   const avgRating = 4.3;
-  const totalListings = employeeListings.length;
+  const totalListings = listings.length;
 
   const viewsChange = ((totalViews - previousViews) / previousViews) * 100;
   const leadsChange = ((totalLeads - previousLeads) / previousLeads) * 100;
@@ -43,9 +66,7 @@ export default function EmployeeDashboard() {
 
       {/* Timeframe Selector */}
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-muted-foreground">
-          View:
-        </span>
+        <span className="text-sm font-medium text-muted-foreground">View:</span>
         <div className="flex gap-2">
           {["day", "week", "month", "year"].map((period) => (
             <button
@@ -124,9 +145,7 @@ export default function EmployeeDashboard() {
             </div>
           </div>
           <p className="text-3xl font-bold text-foreground">{avgRating}</p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Out of 5.0 stars
-          </p>
+          <p className="mt-2 text-xs text-muted-foreground">Out of 5.0 stars</p>
         </div>
       </div>
 
@@ -165,40 +184,60 @@ export default function EmployeeDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {employeeListings.map((listing) => (
-                <tr
-                  key={listing.id}
-                  className="hover:bg-secondary/50 transition-colors"
-                >
-                  <td className="px-6 py-4 font-medium text-foreground">
-                    {listing.businessName}
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    {listing.categoryName}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                        listing.verified
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                          : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
-                      }`}
-                    >
-                      {listing.verified ? "Verified" : "Pending"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    {listing.viewCount}
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    {new Date(listing.createdAt).toLocaleDateString("en-IN", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-muted-foreground"
+                  >
+                    Loading listings...
                   </td>
                 </tr>
-              ))}
+              ) : listings.length > 0 ? (
+                listings.map((listing) => (
+                  <tr
+                    key={listing.id}
+                    className="hover:bg-secondary/50 transition-colors"
+                  >
+                    <td className="px-6 py-4 font-medium text-foreground">
+                      {listing.businessName}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {listing.categoryName}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                          listing.verified
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
+                        }`}
+                      >
+                        {listing.verified ? "Verified" : "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {listing.viewCount}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {new Date(listing.createdAt).toLocaleDateString("en-IN", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-muted-foreground"
+                  >
+                    No listings yet
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

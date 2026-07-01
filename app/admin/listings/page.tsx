@@ -59,7 +59,7 @@ export default function AdminListingsPage() {
       }
 
       const response = await listingService.getListing(params);
-      const data = response.data?.data;
+      const data = response.data?.data?.data;
       // Support both paginated ({ items, totalCount }) and plain array responses
       if (Array.isArray(data)) {
         setListings(data);

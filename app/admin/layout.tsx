@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSideBar";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function AdminLayout({
   children,
@@ -11,8 +12,9 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-
+  const { logout } = useAuthStore();
   const handleLogout = () => {
+    logout();
     router.push("/");
   };
   return (

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { X, Loader2, Eye, EyeOff } from "lucide-react";
 import { User, CreateUser, Status } from "@/types/User";
 import { authService } from "@/service/apis/auth.service";
+import { City, State } from "@/types/CityState";
+import { stateService } from "@/service/apis/state.service";
 
 interface UserFormModalProps {
   user?: User | null;
@@ -26,6 +28,10 @@ const EMPTY_FORM: CreateUser = {
   panNumber: "",
   role: "User",
 };
+
+const selectCls = `w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors
+  hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30
+  disabled:opacity-60 disabled:cursor-not-allowed`;
 
 // ─── Field (text/email/etc.) ────────────────────────────────────────────────
 interface FieldProps {
@@ -122,8 +128,40 @@ function PasswordField({
     </div>
   );
 }
-// ───────────────────────────────────────────────────────────────────────────
 
+// ─── SelectField ─────────────────────────────────────────────────────────────
+interface SelectFieldProps {
+  label: string;
+  error?: string;
+  colSpan?: number;
+  children: React.ReactNode;
+  selectProps: React.SelectHTMLAttributes<HTMLSelectElement>;
+}
+
+function SelectField({
+  label,
+  error,
+  colSpan = 1,
+  children,
+  selectProps,
+}: SelectFieldProps) {
+  return (
+    <div className={colSpan === 2 ? "col-span-2" : ""}>
+      <label className="block text-sm font-medium text-foreground mb-1">
+        {label}
+      </label>
+      <select
+        {...selectProps}
+        className={`${selectCls} ${error ? "border-red-500" : ""} ${selectProps.className ?? ""}`}
+      >
+        {children}
+      </select>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function UserFormModal({
   user,
   defaultRole = "User",
@@ -133,14 +171,56 @@ export default function UserFormModal({
   const isEditMode = Boolean(user);
 
   const [form, setForm] = useState<CreateUser>(EMPTY_FORM);
+  const [states, setStates] = useState<State[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [selectedStateIso, setSelectedStateIso] = useState("");
   const [status, setStatus] = useState<Status>("Active");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
   const [errors, setErrors] = useState<
     Partial<Record<keyof CreateUser | "password" | "confirmPassword", string>>
   >({});
 
+  // ── Data fetchers ──
+
+  const fetchStates = async () => {
+    setLoadingStates(true);
+    try {
+      const response = await stateService.getStates("IN");
+      if (response.data?.success) {
+        setStates(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch states:", error);
+    } finally {
+      setLoadingStates(false);
+    }
+  };
+
+  const fetchCities = async (iso2: string) => {
+    setLoadingCities(true);
+    setCities([]);
+    try {
+      const response = await stateService.getCities(iso2);
+      if (response.data?.success) {
+        setCities(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch cities:", error);
+    } finally {
+      setLoadingCities(false);
+    }
+  };
+
+  // Fetch states once on mount
+  useEffect(() => {
+    fetchStates();
+  }, []);
+
+  // Populate form when editing an existing user
   useEffect(() => {
     if (user) {
       setForm({
@@ -158,14 +238,38 @@ export default function UserFormModal({
         role: user.role,
       });
       setStatus(user.status);
+      if (user.state && states.length > 0) {
+        const matched = states.find((s) => s.name === user.state);
+        if (matched) {
+          setSelectedStateIso(matched.iso2);
+          fetchCities(matched.iso2);
+        }
+      }
     } else {
       setForm({ ...EMPTY_FORM, role: defaultRole });
       setStatus("Active");
+      setSelectedStateIso("");
+      setCities([]);
     }
     setPassword("");
     setConfirmPassword("");
     setErrors({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Re-run city pre-population when states finish loading in edit mode
+  useEffect(() => {
+    if (isEditMode && user?.state && states.length > 0 && !selectedStateIso) {
+      const matched = states.find((s) => s.name === user.state);
+      if (matched) {
+        setSelectedStateIso(matched.iso2);
+        fetchCities(matched.iso2);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [states]);
+
+  // ── Handlers ──
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -175,6 +279,27 @@ export default function UserFormModal({
     if (errors[name as keyof typeof errors]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
+  };
+
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const iso2 = e.target.value;
+    const selected = states.find((s) => s.iso2 === iso2);
+
+    setSelectedStateIso(iso2);
+    setForm((prev) => ({
+      ...prev,
+      state: selected?.name ?? "",
+      city: "", // reset city when state changes
+    }));
+    setErrors((prev) => ({ ...prev, state: undefined, city: undefined }));
+    setCities([]);
+
+    if (iso2) fetchCities(iso2);
+  };
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setForm((prev) => ({ ...prev, city: e.target.value }));
+    setErrors((prev) => ({ ...prev, city: undefined }));
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,6 +315,8 @@ export default function UserFormModal({
     if (errors.confirmPassword)
       setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
   };
+
+  // ── Validation ──
 
   const validate = (): boolean => {
     const newErrors: Partial<
@@ -212,9 +339,7 @@ export default function UserFormModal({
     else if (!/^\d{6}$/.test(form.pincode))
       newErrors.pincode = "Must be 6 digits";
 
-    // Password validation
     if (!isEditMode) {
-      // Add mode — password required
       if (!password) newErrors.password = "Password is required";
       else if (password.length < 8)
         newErrors.password = "Must be at least 8 characters";
@@ -223,7 +348,6 @@ export default function UserFormModal({
       else if (password !== confirmPassword)
         newErrors.confirmPassword = "Passwords do not match";
     } else {
-      // Edit mode — password optional, but if filled must be valid
       if (password) {
         if (password.length < 8)
           newErrors.password = "Must be at least 8 characters";
@@ -238,11 +362,12 @@ export default function UserFormModal({
     return Object.keys(newErrors).length === 0;
   };
 
+  // ── Submit ──
+
   const handleSubmit = async () => {
     if (!validate()) return;
     setLoading(true);
 
-    // Always include status; merge password only when provided
     const payload: CreateUser = password
       ? { ...form, status, password }
       : { ...form, status };
@@ -324,23 +449,19 @@ export default function UserFormModal({
                 error={errors.contactNumber}
                 onChange={handleChange}
               />
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1">
-                  Role
-                </label>
-                <select
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  disabled={isEditMode}
-                  className={`w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors
-                    ${isEditMode ? "opacity-60 cursor-not-allowed" : "hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"}`}
-                >
-                  <option value="User">User</option>
-                  <option value="Employee">Employee</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
+              <SelectField
+                label="Role"
+                selectProps={{
+                  name: "role",
+                  value: form.role,
+                  onChange: handleChange,
+                  disabled: isEditMode,
+                }}
+              >
+                <option value="User">User</option>
+                <option value="Employee">Employee</option>
+                <option value="Admin">Admin</option>
+              </SelectField>
             </div>
           </section>
 
@@ -400,20 +521,51 @@ export default function UserFormModal({
                 value={form.landmark ?? ""}
                 onChange={handleChange}
               />
-              <Field
-                label="City"
-                name="city"
-                value={form.city}
-                error={errors.city}
-                onChange={handleChange}
-              />
-              <Field
+
+              {/* State dropdown */}
+              <SelectField
                 label="State"
-                name="state"
-                value={form.state}
                 error={errors.state}
-                onChange={handleChange}
-              />
+                selectProps={{
+                  value: selectedStateIso,
+                  onChange: handleStateChange,
+                  disabled: loadingStates,
+                }}
+              >
+                <option value="">
+                  {loadingStates ? "Loading states…" : "Select a state"}
+                </option>
+                {states.map((s) => (
+                  <option key={s.iso2} value={s.iso2}>
+                    {s.name}
+                  </option>
+                ))}
+              </SelectField>
+
+              {/* City dropdown — disabled until a state is selected */}
+              <SelectField
+                label="City"
+                error={errors.city}
+                selectProps={{
+                  value: form.city,
+                  onChange: handleCityChange,
+                  disabled: !selectedStateIso || loadingCities,
+                }}
+              >
+                <option value="">
+                  {!selectedStateIso
+                    ? "Select a state first"
+                    : loadingCities
+                      ? "Loading cities…"
+                      : "Select a city"}
+                </option>
+                {cities.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </SelectField>
+
               <Field
                 label="Pincode"
                 name="pincode"
@@ -450,16 +602,18 @@ export default function UserFormModal({
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
               Account Status
             </h3>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as Status)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+            <SelectField
+              label="Status"
+              selectProps={{
+                value: status,
+                onChange: (e) => setStatus(e.target.value as Status),
+              }}
             >
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
               <option value="Pending">Pending</option>
               <option value="Draft">Draft</option>
-            </select>
+            </SelectField>
           </section>
 
           {/* Meta — Edit mode only */}
@@ -486,7 +640,7 @@ export default function UserFormModal({
             className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEditMode ? "Save Changes" : "Add User"}
+            {isEditMode ? "Save Changes" : `Add ${form.role}`}
           </button>
         </div>
       </div>

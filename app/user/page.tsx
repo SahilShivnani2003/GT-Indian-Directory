@@ -1,10 +1,13 @@
 "use client";
 
+import { listingService } from "@/service/apis/listing.service";
+import { Listing } from "@/types/Listing";
 import { ShoppingCart, Heart, MapPin, Star, TrendingUp, Clock } from "lucide-react";
 import Link from "next/link";
-import { listings } from "@/data/listings";
+import { useEffect, useState } from "react";
 
 export default function UserDashboard() {
+  const [listings, setListings] = useState<Listing[]|null>(null);
   // Mock data
   const totalOrders = 12;
   const pendingOrders = 2;
@@ -12,8 +15,21 @@ export default function UserDashboard() {
   const savedListings = 8;
   const totalSpent = "₹45,250";
 
-  const recentListings = listings.slice(0, 4);
+  useEffect(()=>{
+    fetchListings();
+  },[])
+  const fetchListings = async() =>{
+    try{
+      console.log('Fetching listings');
+      const response = await listingService.getListing({pageNumber: 1, pageSize: 6});
+      if(response.data?.success){
+        setListings(response.data?.data?.data);
+      }
 
+    }catch(error){
+      console.error('Failed to load listings: ', error);
+    }
+  }
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
@@ -147,7 +163,7 @@ export default function UserDashboard() {
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-6">
-          {recentListings.map((listing) => (
+          {listings && listings.map((listing) => (
             <Link
               key={listing.id}
               href={`/listings/${listing.id}`}
