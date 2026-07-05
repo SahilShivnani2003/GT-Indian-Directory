@@ -19,6 +19,7 @@ import Image from "next/image";
 const menuItems = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/listings", icon: ShoppingBag, label: "Listings" },
+  {href: "/admin/banners", icon: ShoppingBag, label: "Banners"},
   { href: "/admin/moderation", icon: CheckCircle, label: "Moderation Queue" },
   { href: "/admin/users", icon: Users, label: "Business Users" },
   { href: "/admin/employees", icon: Users, label: "Employees" },
@@ -26,7 +27,6 @@ const menuItems = [
   { href: "/admin/subcategories", icon: FolderOpen, label: "Subcategories" },
   { href: "/admin/tourist-places", icon: MapPin, label: "Tourist Places" },
   { href: "/admin/products", icon: Package, label: "Products" },
-  { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
   { href: "/admin/plans", icon: CreditCard, label: "Plans" },
   { href: "/admin/analytics", icon: BarChart3, label: "Analytics" },
 ];

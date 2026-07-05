@@ -2,7 +2,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { ApiError } from "@/types/ApiError";
 import axios from "axios";
 
-const BASE_URL = process.env.API_URL || 'https://localhost:44394/api';
+const BASE_URL = process.env.API_URL || 'https://indian-online-directory-be.onrender.com/api';
 
 export const publicClient = axios.create({
     baseURL: BASE_URL,

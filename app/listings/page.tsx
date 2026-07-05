@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { BadgeCheck, SlidersHorizontal, Star } from "lucide-react";
 import Link from "next/link";
 import { SearchBar } from "@/components/home/SearchBar";
@@ -13,14 +13,14 @@ import { listingService } from "@/service/apis/listing.service";
 import { categoryService } from "@/service/apis/category.service";
 import { stateService } from "@/service/apis/state.service";
 
-// Fallback image when a listing has no images uploaded
 const PLACEHOLDER_IMAGE = "/images/listing-placeholder.png";
+const PAGE_SIZE = 10;
 
 function ListingsContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
   const location = searchParams.get("location") || "";
-  const category = searchParams.get("category") || "";
+  const category = searchParams.get("category") || ""; // this is a slug, e.g. "electronics"
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,37 +28,7 @@ function ListingsContent() {
   const [loadingListings, setLoadingListings] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
-  // ── Fetch listings ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    const fetchListings = async () => {
-      setLoadingListings(true);
-      try {
-        const response = await listingService.getListing({
-          pageNumber: 1,
-          pageSize: 10,
-          isFeatured: false,
-          status: "Active",
-          ...(query && { search: query }),
-          ...(category && { categorySlug: category }),
-          ...(location && location !== "all" && { location }),
-        });
-        if (response.data?.success) {
-          setListings(response.data.data?.data ?? []);
-        } else {
-          setListings([]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch listings:", error);
-        setListings([]);
-      } finally {
-        setLoadingListings(false);
-      }
-    };
-
-    fetchListings();
-  }, [query, category, location]); // re-fetch whenever search params change
-
-  // ── Fetch categories (for sidebar) ─────────────────────────────────────────
+  // ── Fetch categories first (for sidebar + resolving slug → id) ─────────────
   useEffect(() => {
     const fetchCategories = async () => {
       setLoadingCategories(true);
@@ -79,12 +49,63 @@ function ListingsContent() {
     fetchCategories();
   }, []);
 
+  // ── Fetch listings ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    // If a category slug is present in the URL, wait until categories have
+    // loaded so we can resolve it to the categoryId the API actually accepts.
+    // Without this guard we'd either send no category filter on first paint,
+    // or send a stale/wrong id.
+    if (category && loadingCategories) return;
+
+    const fetchListings = async () => {
+      setLoadingListings(true);
+      try {
+        const matchedCategory = category
+          ? categories.find((c) => c.slug === category)
+          : undefined;
+
+        const params: {
+          pageNumber: number;
+          pageSize: number;
+          status: "Active";
+          search?: string;
+          categoryId?: string;
+        } = {
+          pageNumber: 1,
+          pageSize: PAGE_SIZE,
+          status: "Active",
+        };
+
+        if (query) params.search = query;
+        if (matchedCategory) params.categoryId = matchedCategory.id;
+        // Note: category slug present but not found in the loaded list —
+        // don't silently ignore it, fall through with no category filter
+        // rather than pretending a match; the empty grid + "No businesses
+        // found" state will surface this instead of masking it.
+
+        const response = await listingService.getListing(params);
+        if (response.data?.success) {
+          setListings(response.data.data?.data ?? []);
+        } else {
+          setListings([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch listings:", error);
+        setListings([]);
+      } finally {
+        setLoadingListings(false);
+      }
+    };
+
+    fetchListings();
+  }, [query, category, categories, loadingCategories]);
+
   // ── Fetch cities (for SearchBar) ────────────────────────────────────────────
   useEffect(() => {
     const fetchCities = async () => {
       try {
         const cityRes = await stateService.getCities("MP");
-        if (!cityRes.data?.success) return;       
+        if (!cityRes.data?.success) return;
         setCities(cityRes.data?.data);
       } catch (error) {
         console.error("Failed to fetch cities:", error);
@@ -93,6 +114,21 @@ function ListingsContent() {
 
     fetchCities();
   }, []);
+
+  // ── Client-side location filter ──────────────────────────────────────────
+  // listingService has no location/city param, so this narrows the fetched
+  // page of results locally. This means the displayed count and pagination
+  // reflect the fetched page only, not a true server-side filtered total —
+  // fine for a single page of 10, but won't scale if you paginate this list.
+  const filteredListings = useMemo(() => {
+    if (!location || location === "all") return listings;
+    const needle = location.toLowerCase();
+    return listings.filter((l) =>
+      [l.city, l.area, l.state].some((field) =>
+        field?.toLowerCase().includes(needle),
+      ),
+    );
+  }, [listings, location]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -108,8 +144,8 @@ function ListingsContent() {
               "Loading…"
             ) : (
               <>
-                {listings.length}{" "}
-                {listings.length === 1 ? "listing" : "listings"} found
+                {filteredListings.length}{" "}
+                {filteredListings.length === 1 ? "listing" : "listings"} found
                 {location && location !== "all" ? ` in ${location}` : ""}
               </>
             )}
@@ -145,8 +181,7 @@ function ListingsContent() {
                 </Link>
 
                 {loadingCategories
-                  ? // Skeleton rows while categories load
-                    Array.from({ length: 5 }).map((_, i) => (
+                  ? Array.from({ length: 5 }).map((_, i) => (
                       <div
                         key={i}
                         className="mx-3 my-1 h-4 animate-pulse rounded bg-muted"
@@ -175,7 +210,6 @@ function ListingsContent() {
           {/* Results Grid */}
           <div className="flex-1">
             {loadingListings ? (
-              // Skeleton cards while listings load
               <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
@@ -191,18 +225,17 @@ function ListingsContent() {
                   </div>
                 ))}
               </div>
-            ) : listings.length > 0 ? (
+            ) : filteredListings.length > 0 ? (
               <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                {listings.map((listing) => (
+                {filteredListings.map((listing) => (
                   <Link
                     key={listing.slug}
-                    href={`/listings/${listing.slug}`}
+                    href={`/listings/${listing.id}`}
                     className="group block"
                   >
                     <div className="overflow-hidden rounded-xl border border-border bg-card transition-shadow hover:shadow-lg">
                       <div className="relative aspect-[16/10] overflow-hidden">
                         <Image
-                          // Fallback to placeholder if images array is empty
                           src={listing.images?.[0] || PLACEHOLDER_IMAGE}
                           alt={listing.businessName}
                           fill
@@ -229,7 +262,6 @@ function ListingsContent() {
                           {listing.description}
                         </p>
 
-                        {/* Location pill */}
                         <p className="mt-2 truncate text-xs text-muted-foreground">
                           {[listing.area, listing.city, listing.state]
                             .filter(Boolean)

@@ -36,6 +36,7 @@ const EMPTY_FORM: CreateListing = {
   city: "",
   state: "",
   pinCode: "",
+  featured: false,
 };
 
 const inputCls =
@@ -138,9 +139,9 @@ export function AddListingModal({
 
   const fetchCities = async (iso2: string) => {
     setLoadingCities(true);
-    setCities([]); 
+    setCities([]);
     try {
-      const response = await stateService.getCities(iso2);      
+      const response = await stateService.getCities(iso2);
       if (response.data?.success) {
         setCities(response.data.data ?? []);
       }
@@ -205,7 +206,7 @@ export function AddListingModal({
     }));
     setErrors((prev) => ({ ...prev, state: undefined, city: undefined }));
     setCities([]);
-    debugger
+    debugger;
     if (iso2) {
       fetchCities(iso2);
     }
@@ -389,6 +390,22 @@ export function AddListingModal({
                     value={form.website}
                     onChange={setField("website")}
                   />
+                </Field>
+                <Field label="Featured Listing" error={errors.featured}>
+                  <label className="flex h-[38px] items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={form.featured}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          featured: e.target.checked,
+                        }))
+                      }
+                      className="rounded border-border"
+                    />
+                    Mark this listing as featured
+                  </label>
                 </Field>
 
                 <div className="sm:col-span-2">

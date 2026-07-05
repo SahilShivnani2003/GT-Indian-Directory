@@ -31,8 +31,8 @@ export default function AdminProductsPage() {
     }
   }
 
-  const activeProducts = products.filter((p) => p.status === 'Active').length
-  const featuredProducts = products.filter((p) => p.isFeatured).length
+  const activeProducts = products.filter((p) => p.status === 'active').length
+  const featuredProducts = products.filter((p) => p.featured).length
   const totalRevenue = products.length * 25000 // Mock calculation
 
   const handleDelete = async (id: string) => {

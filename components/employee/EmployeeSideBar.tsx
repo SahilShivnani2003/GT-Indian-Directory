@@ -10,6 +10,7 @@ import {
   Settings,
   FileText,
   TrendingUp,
+  User,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -18,6 +19,11 @@ const menuItems = [
     label: "Dashboard",
     href: "/employee",
     icon: LayoutDashboard,
+  },
+  {
+    label: "Bussiness User",
+    href: "/employee/users",
+    icon: User,
   },
   {
     label: "My Listings",

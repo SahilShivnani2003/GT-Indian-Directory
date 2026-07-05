@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Plus,
   Edit2,
@@ -10,10 +10,17 @@ import {
   Star,
   Loader2,
   AlertCircle,
+  Upload,
+  X,
 } from "lucide-react";
 import { TouristPlace, CreateTouristPlace } from "@/types/TouristPlaces";
 import { DataTable } from "@/components/admin/DataTable";
 import { touristService } from "@/service/apis/tourist.service";
+import { categoryService } from "@/service/apis/category.service";
+import { stateService } from "@/service/apis/state.service";
+import { imageService } from "@/service/apis/image.service";
+import { Category } from "@/types/Category";
+import { City, State } from "@/types/CityState";
 
 const EMPTY_FORM: CreateTouristPlace = {
   name: "",
@@ -68,6 +75,21 @@ export default function AdminTouristPlacesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Dropdown data (category / state / city) ──
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [statesList, setStatesList] = useState<State[]>([]);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [cities, setCities] = useState<City[]>([]);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [selectedStateIso, setSelectedStateIso] = useState("");
+
+  // ── Image upload ──
+  const [uploadingMainImage, setUploadingMainImage] = useState(false);
+  const [uploadingGalleryImages, setUploadingGalleryImages] = useState(false);
+  const mainImageInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
   const loadPlaces = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
@@ -76,7 +98,7 @@ export default function AdminTouristPlacesPage() {
         pageNumber: 1,
         pageSize: 1000,
       });
-      setPlaces(res.data?.data?.data);
+      setPlaces(res.data?.data?.data ?? []);
     } catch (err) {
       console.error("Failed to load tourist places", err);
       setLoadError("Couldn't load tourist places. Try refreshing the page.");
@@ -86,13 +108,172 @@ export default function AdminTouristPlacesPage() {
     }
   }, []);
 
+  const fetchCategories = useCallback(async () => {
+    setLoadingCategories(true);
+    try {
+      const response = await categoryService.getCategories({ isAcitve: true });
+      if (response.data?.success) {
+        setCategories(response.data?.data?.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch categories: ", error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
+
+  const fetchStates = useCallback(async () => {
+    setLoadingStates(true);
+    try {
+      const response = await stateService.getStates("IN");
+      if (response.data?.success) {
+        setStatesList(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch states:", error);
+    } finally {
+      setLoadingStates(false);
+    }
+  }, []);
+
+  const fetchCities = useCallback(async (iso2: string) => {
+    setLoadingCities(true);
+    setCities([]);
+    try {
+      const response = await stateService.getCities(iso2);
+      if (response.data?.success) {
+        setCities(response.data.data ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch cities:", error);
+    } finally {
+      setLoadingCities(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadPlaces();
-  }, [loadPlaces]);
+    fetchCategories();
+    fetchStates();
+  }, [loadPlaces, fetchCategories, fetchStates]);
+
+  // ── Dropdown handlers ──
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = categories.find((c) => c.id === e.target.value);
+    setFormData((prev) => ({ ...prev, category: selected?.name ?? "" }));
+  };
+
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const iso2 = e.target.value;
+    const selected = statesList.find((s) => s.iso2 === iso2);
+
+    setSelectedStateIso(iso2);
+    setFormData((prev) => ({
+      ...prev,
+      state: selected?.name ?? "",
+      city: "", // reset city whenever state changes
+    }));
+    setCities([]);
+    if (iso2) {
+      fetchCities(iso2);
+    }
+  };
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFormData((prev) => ({ ...prev, city: e.target.value }));
+  };
+
+  // ── Image upload handlers ──
+
+  const handleMainImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingMainImage(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append("files", file);
+      const response = await imageService.uploadMultipleImages(uploadData);
+      if (response.data?.success) {
+        const url = response.data?.data?.urls?.[0];
+        if (url) {
+          setFormData((prev) => ({ ...prev, image: url }));
+        }
+      } else {
+        console.error("Image upload failed: ", response.data?.message);
+        alert("Failed to upload image");
+      }
+    } catch (error) {
+      console.error("Error uploading main image: ", error);
+      alert("Failed to upload image");
+    } finally {
+      setUploadingMainImage(false);
+      if (mainImageInputRef.current) mainImageInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveMainImage = async () => {
+    const currentUrl = formData.image;
+    setFormData((prev) => ({ ...prev, image: "" }));
+    if (!currentUrl) return;
+    try {
+      await imageService.deleteImage(currentUrl);
+    } catch (error) {
+      console.error("Error deleting main image: ", error);
+    }
+  };
+
+  const handleGalleryFilesChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    setUploadingGalleryImages(true);
+    try {
+      const uploadData = new FormData();
+      files.forEach((file) => uploadData.append("files", file));
+      const response = await imageService.uploadMultipleImages(uploadData);
+      if (response.data?.success) {
+        const urls: string[] = response.data?.data?.urls ?? [];
+        setFormData((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
+      } else {
+        console.error("Image upload failed: ", response.data?.message);
+        alert("Failed to upload images");
+      }
+    } catch (error) {
+      console.error("Error uploading gallery images: ", error);
+      alert("Failed to upload images");
+    } finally {
+      setUploadingGalleryImages(false);
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveGalleryImage = async (index: number) => {
+    const url = formData.images[index];
+    setFormData((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index),
+    }));
+    if (!url) return;
+    try {
+      await imageService.deleteImage(url);
+    } catch (error) {
+      console.error("Error deleting gallery image: ", error);
+    }
+  };
+
+  // ── Modal open/close ──
 
   const handleAddPlace = () => {
     setFormData(EMPTY_FORM);
     setSaveError(null);
+    setSelectedStateIso("");
+    setCities([]);
     setIsAddingNew(true);
     setSelectedPlace(null);
   };
@@ -102,6 +283,16 @@ export default function AdminTouristPlacesPage() {
     setSaveError(null);
     setSelectedPlace(place);
     setIsAddingNew(false);
+
+    // Resolve the state name back to an iso2 code so the city list loads.
+    const matchedState = statesList.find((s) => s.name === place.state);
+    if (matchedState) {
+      setSelectedStateIso(matchedState.iso2);
+      fetchCities(matchedState.iso2);
+    } else {
+      setSelectedStateIso("");
+      setCities([]);
+    }
   };
 
   const closeModal = () => {
@@ -117,6 +308,8 @@ export default function AdminTouristPlacesPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // ── Row actions ──
+
   const handleToggleVisibility = async (place: TouristPlace) => {
     const newStatus = place.status === "active" ? "inactive" : "active";
     setPlaces((prev) =>
@@ -126,9 +319,9 @@ export default function AdminTouristPlacesPage() {
       const response = await touristService.updateTouristPlace(place.id, {
         ...toFormData(place),
         status: newStatus,
-      } as CreateTouristPlace);
+      });
 
-      if(response.data?.success){
+      if (response.data?.success) {
         await loadPlaces();
       }
     } catch (err) {
@@ -207,6 +400,8 @@ export default function AdminTouristPlacesPage() {
   };
 
   const isModalOpen = isAddingNew || selectedPlace !== null;
+  const selectedCategoryId =
+    categories.find((c) => c.name === formData.category)?.id ?? "";
 
   return (
     <div>
@@ -276,7 +471,23 @@ export default function AdminTouristPlacesPage() {
       ) : (
         <DataTable
           columns={[
-            { key: "name", label: "Place Name", width: "23%" },
+            {
+              key: "image",
+              label: "Image",
+              width: "8%",
+              render: (value) =>
+                value ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={value}
+                    alt=""
+                    className="h-10 w-10 rounded-md object-cover border border-border"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-md bg-secondary" />
+                ),
+            },
+            { key: "name", label: "Place Name", width: "18%" },
             {
               key: "category",
               label: "Category",
@@ -287,12 +498,12 @@ export default function AdminTouristPlacesPage() {
                 </span>
               ),
             },
-            { key: "city", label: "City", width: "14%" },
-            { key: "state", label: "State", width: "14%" },
+            { key: "city", label: "City", width: "13%" },
+            { key: "state", label: "State", width: "13%" },
             {
               key: "status",
               label: "Status",
-              width: "11%",
+              width: "10%",
               render: (value) => (
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -308,7 +519,7 @@ export default function AdminTouristPlacesPage() {
             {
               key: "featured",
               label: "Featured",
-              width: "10%",
+              width: "9%",
               render: (value) =>
                 value ? (
                   <span className="inline-block rounded-full bg-saffron/10 px-2.5 py-1 text-xs font-semibold text-saffron">
@@ -321,7 +532,7 @@ export default function AdminTouristPlacesPage() {
             {
               key: "actions",
               label: "Actions",
-              width: "14%",
+              width: "13%",
               render: (_, row: TouristPlace) => (
                 <div className="flex items-center gap-2">
                   <button
@@ -389,35 +600,67 @@ export default function AdminTouristPlacesPage() {
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                   />
                 </Field>
+
                 <Field label="Category">
-                  <input
-                    type="text"
-                    placeholder="e.g., Historical Monument"
-                    value={formData.category}
-                    onChange={(e) =>
-                      handleFormChange("category", e.target.value)
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
+                  <select
+                    value={selectedCategoryId}
+                    onChange={handleCategoryChange}
+                    disabled={loadingCategories}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60"
+                  >
+                    <option value="">
+                      {loadingCategories
+                        ? "Loading categories…"
+                        : "Select a category"}
+                    </option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
-                <Field label="City">
-                  <input
-                    type="text"
-                    placeholder="e.g., Agra"
-                    value={formData.city}
-                    onChange={(e) => handleFormChange("city", e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
-                </Field>
+
                 <Field label="State">
-                  <input
-                    type="text"
-                    placeholder="e.g., Uttar Pradesh"
-                    value={formData.state}
-                    onChange={(e) => handleFormChange("state", e.target.value)}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                  />
+                  <select
+                    value={selectedStateIso}
+                    onChange={handleStateChange}
+                    disabled={loadingStates}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60"
+                  >
+                    <option value="">
+                      {loadingStates ? "Loading states…" : "Select a state"}
+                    </option>
+                    {statesList.map((s) => (
+                      <option key={s.iso2} value={s.iso2}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
+
+                <Field label="City">
+                  <select
+                    value={formData.city}
+                    onChange={handleCityChange}
+                    disabled={!selectedStateIso || loadingCities}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60"
+                  >
+                    <option value="">
+                      {!selectedStateIso
+                        ? "Select a state first"
+                        : loadingCities
+                          ? "Loading cities…"
+                          : "Select a city"}
+                    </option>
+                    {cities.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
                 <Field label="Location / Address">
                   <input
                     type="text"
@@ -536,32 +779,97 @@ export default function AdminTouristPlacesPage() {
                 />
               </Field>
 
-              <Field label="Main Image URL">
+              {/* Main Image Upload */}
+              <Field label="Main Image">
                 <input
-                  type="text"
-                  placeholder="https://example.com/image.jpg"
-                  value={formData.image}
-                  onChange={(e) => handleFormChange("image", e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  ref={mainImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleMainImageChange}
                 />
+                {formData.image ? (
+                  <div className="group relative h-24 w-24 overflow-hidden rounded-lg border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={formData.image}
+                      alt="Main"
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveMainImage}
+                      className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <X className="h-4 w-4 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => mainImageInputRef.current?.click()}
+                    disabled={uploadingMainImage}
+                    className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:bg-secondary/50 disabled:opacity-60"
+                  >
+                    {uploadingMainImage ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="h-5 w-5" />
+                        <span className="text-xs">Upload</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </Field>
 
-              <Field label="Additional Image URLs (comma-separated)">
+              {/* Additional Images Upload */}
+              <Field label="Additional Images">
                 <input
-                  type="text"
-                  placeholder="https://.../1.jpg, https://.../2.jpg"
-                  value={(formData.images ?? []).join(", ")}
-                  onChange={(e) =>
-                    handleFormChange(
-                      "images",
-                      e.target.value
-                        .split(",")
-                        .map((url) => url.trim())
-                        .filter(Boolean),
-                    )
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleGalleryFilesChange}
                 />
+                <div className="flex flex-wrap gap-2">
+                  {formData.images.map((src, i) => (
+                    <div
+                      key={i}
+                      className="group relative h-20 w-20 overflow-hidden rounded-lg border border-border"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt={`Gallery ${i + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveGalleryImage(i)}
+                        className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        <X className="h-4 w-4 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    disabled={uploadingGalleryImages}
+                    className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:bg-secondary/50 disabled:opacity-60"
+                  >
+                    {uploadingGalleryImages ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        <span className="text-xs">Add</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </Field>
 
               <label className="flex items-center gap-2">
@@ -596,7 +904,7 @@ export default function AdminTouristPlacesPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={isSaving || uploadingMainImage || uploadingGalleryImages}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}

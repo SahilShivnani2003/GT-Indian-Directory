@@ -22,9 +22,8 @@ export default function ProductsPage() {
         pageSize: 50,
       });
 
-      // Adjust this line to match your API's actual response shape.
-      // Common shapes: response.data, response.data.items, response.data.data
-      const data: Product[] = response.data?.items ?? response.data ?? [];
+      // API shape: { success, message, data: { data: Product[], pageNumber, ... } }
+      const data: Product[] = response.data?.data?.data ?? [];
       setProducts(data);
     } catch (error) {
       console.error("Failed to fetch products: ", error);
@@ -50,7 +49,7 @@ export default function ProductsPage() {
   const categories = ["all", ...new Set(products.map((p) => p.category))];
 
   const discountPercent = (prod: Product) =>
-    prod.discountPrice
+    prod.discountPrice && prod.discountPrice < prod.price
       ? Math.round(((prod.price - prod.discountPrice) / prod.price) * 100)
       : 0;
 
@@ -139,15 +138,21 @@ export default function ProductsPage() {
                 {filteredProducts.map((product) => (
                   <Link
                     key={product.id}
-                    href={`/products/${product.slug}`}
+                    href={`/products/${product.id}`}
                     className="group rounded-lg border border-border bg-card transition-all hover:border-primary hover:shadow-lg"
                   >
                     <div className="relative h-48 w-full overflow-hidden bg-secondary">
-                      <img
-                        src={product.images[0]}
-                        alt={product.name}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
+                      {product.images?.[0] ? (
+                        <img
+                          src={product.images[0]}
+                          alt={product.name}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                          No image
+                        </div>
+                      )}
                       {product.featured && (
                         <div className="absolute right-2 top-2 rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">
                           Featured
@@ -189,9 +194,12 @@ export default function ProductsPage() {
 
                       <div className="mt-3 flex items-center gap-2">
                         <span className="text-lg font-bold text-foreground">
-                          ₹{product.discountPrice || product.price}
+                          ₹
+                          {discountPercent(product) > 0
+                            ? product.discountPrice
+                            : product.price}
                         </span>
-                        {product.discountPrice && (
+                        {discountPercent(product) > 0 && (
                           <span className="text-sm text-muted-foreground line-through">
                             ₹{product.price}
                           </span>

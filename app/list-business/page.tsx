@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { CheckCircle, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, ArrowRight, Loader2, ImagePlus, X } from "lucide-react";
 import { Category } from "@/types/Category";
 import { City, State } from "@/types/CityState";
 import { stateService } from "@/service/apis/state.service";
 import { categoryService } from "@/service/apis/category.service";
 import { listingService } from "@/service/apis/listing.service";
+import { imageService } from "@/service/apis/image.service"; // adjust path if different
+
+const MAX_IMAGES = 3;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,7 +26,6 @@ function slugify(name: string) {
 // ── Form shape ───────────────────────────────────────────────────────────────
 
 interface FormData {
-  // Step 1 – Business Info
   businessName: string;
   slug: string;
   categoryId: string;
@@ -32,19 +34,17 @@ interface FormData {
   email: string;
   website: string;
   description: string;
-  // Step 2 – Location
   addressLine1: string;
   addressLine2: string;
   area: string;
   district: string;
   cityId: string;
   stateId: string;
-  stateIso2: string; // stored so we can pass iso2 to the cities API
+  stateIso2: string;
   pinCode: string;
-  // Step 3 – Details
   businessHours: string;
   yearEstablished: string;
-  images: FileList | null;
+  images: string[]; // uploaded image URLs (not raw FileList)
 }
 
 const INITIAL: FormData = {
@@ -66,7 +66,7 @@ const INITIAL: FormData = {
   pinCode: "",
   businessHours: "",
   yearEstablished: "",
-  images: null,
+  images: [],
 };
 
 // ── Shared class strings ──────────────────────────────────────────────────────
@@ -95,6 +95,12 @@ export default function ListBusinessPage() {
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
 
+  // Image upload state
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]); // local blob previews, index-aligned with form.images
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // ── Fetch states + categories on mount ─────────────────────────────────────
   useEffect(() => {
     fetchStates();
@@ -109,6 +115,14 @@ export default function ListBusinessPage() {
       setCities([]);
     }
   }, [form.stateIso2]);
+
+  // Clean up blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data fetchers ───────────────────────────────────────────────────────────
 
@@ -128,9 +142,8 @@ export default function ListBusinessPage() {
 
   async function fetchCities(iso2: string) {
     setLoadingCities(true);
-    setCities([]); // clear stale cities immediately
+    setCities([]);
     try {
-      // Pass iso2 so the API knows which state's cities to return
       const response = await stateService.getCities(iso2);
       if (response.data?.success) {
         setCities(response.data.data ?? []);
@@ -156,6 +169,90 @@ export default function ListBusinessPage() {
     }
   }
 
+  // ── Image upload / removal ──────────────────────────────────────────────────
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    setImageError(null);
+
+    const remainingSlots = MAX_IMAGES - form.images.length;
+    if (remainingSlots <= 0) {
+      setImageError(
+        `You can upload up to ${MAX_IMAGES} images on the free plan.`,
+      );
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const filesToUpload = files.slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      setImageError(
+        `Only ${remainingSlots} more image(s) allowed. The rest were skipped.`,
+      );
+    }
+
+    // Show local previews immediately while the upload is in flight
+    const localPreviews = filesToUpload.map((f) => URL.createObjectURL(f));
+    setImagePreviews((prev) => [...prev, ...localPreviews]);
+    setUploadingImages(true);
+
+    try {
+      const uploadData = new FormData();
+      filesToUpload.forEach((file) => uploadData.append("files", file));
+
+      const response = await imageService.uploadMultipleImages(uploadData);
+      if (response.data?.success) {
+        const urls: string[] = response.data?.data?.urls ?? [];
+        setForm((prev) => ({ ...prev, images: [...prev.images, ...urls] }));
+      } else {
+        console.error("Image upload failed:", response.data?.message);
+        setImageError("Image upload failed. Please try again.");
+        // Roll back the previews we optimistically added
+        localPreviews.forEach((url) => URL.revokeObjectURL(url));
+        setImagePreviews((prev) =>
+          prev.filter((p) => !localPreviews.includes(p)),
+        );
+      }
+    } catch (error) {
+      console.error("Error uploading images:", error);
+      setImageError("Image upload failed. Please try again.");
+      localPreviews.forEach((url) => URL.revokeObjectURL(url));
+      setImagePreviews((prev) =>
+        prev.filter((p) => !localPreviews.includes(p)),
+      );
+    } finally {
+      setUploadingImages(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeImage = async (index: number) => {
+    const url = form.images[index];
+    const preview = imagePreviews[index];
+
+    try {
+      if (url) {
+        const response = await imageService.deleteImage(url);
+        if (!response.data?.success) {
+          console.error("Image deletion failed:", response.data?.message);
+          setImageError("Couldn't remove that image. Please try again.");
+          return;
+        }
+      }
+      if (preview) URL.revokeObjectURL(preview);
+      setForm((prev) => ({
+        ...prev,
+        images: prev.images.filter((_, i) => i !== index),
+      }));
+      setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      setImageError("Couldn't remove that image. Please try again.");
+    }
+  };
+
   // ── Form helpers ────────────────────────────────────────────────────────────
 
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
@@ -175,18 +272,13 @@ export default function ListBusinessPage() {
     }));
   }
 
-  /**
-   * When the user picks a state we store both the state id (for the form
-   * payload) and the iso2 code (to pass to the cities API). We also clear
-   * the previously selected city so the dropdown resets.
-   */
   function handleStateChange(stateId: string) {
     const selectedState = states.find((s) => s.id === stateId);
     setForm((prev) => ({
       ...prev,
       stateId,
       stateIso2: selectedState?.iso2 ?? "",
-      cityId: "", // reset city when state changes
+      cityId: "",
     }));
   }
 
@@ -218,8 +310,7 @@ export default function ListBusinessPage() {
         city: form.cityId,
         state: form.stateId,
         pinCode: form.pinCode,
-        images: [] as string[],
-        // images[] – upload files separately, then push the returned URLs here
+        images: form.images,
       };
 
       const response = await listingService.createListing(payload);
@@ -273,7 +364,6 @@ export default function ListBusinessPage() {
 
   return (
     <>
-      {/* Header + step indicator */}
       <section className="border-b border-border bg-card py-10">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h1 className="text-2xl font-bold text-foreground md:text-3xl">
@@ -329,7 +419,6 @@ export default function ListBusinessPage() {
                 Business Information
               </h2>
 
-              {/* Business name */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground">
                   Business Name *
@@ -344,7 +433,6 @@ export default function ListBusinessPage() {
                 />
               </div>
 
-              {/* Auto-generated slug preview */}
               {form.slug && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
@@ -360,7 +448,6 @@ export default function ListBusinessPage() {
               )}
 
               <div className="grid gap-5 sm:grid-cols-2">
-                {/* Category dropdown */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     Category *
@@ -390,7 +477,6 @@ export default function ListBusinessPage() {
                   </div>
                 </div>
 
-                {/* Contact */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     Contact Number *
@@ -402,6 +488,7 @@ export default function ListBusinessPage() {
                     placeholder="+91 98765 43210"
                     className={inputCls}
                     required
+                    maxLength={10}
                   />
                 </div>
               </div>
@@ -514,7 +601,6 @@ export default function ListBusinessPage() {
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
-                {/* State dropdown */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     State *
@@ -542,7 +628,6 @@ export default function ListBusinessPage() {
                   </div>
                 </div>
 
-                {/* City dropdown – enabled only after a state is selected */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
                     City *
@@ -628,32 +713,77 @@ export default function ListBusinessPage() {
                 />
               </div>
 
+              {/* ── Image upload ── */}
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">
-                  Upload Business Images
+                  Business Images
                 </label>
-                <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-border bg-background px-4 py-8">
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={uploadingImages || form.images.length >= MAX_IMAGES}
+                />
+
+                {/* Dropzone / trigger */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingImages || form.images.length >= MAX_IMAGES}
+                  className="flex w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-background px-4 py-8 transition-colors hover:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground">
-                      Drag and drop images here, or click to browse
+                    <ImagePlus className="mx-auto h-6 w-6 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {uploadingImages
+                        ? "Uploading…"
+                        : "Click to browse images"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      PNG, JPG up to 5 MB each · Maximum 3 images on free plan
+                      PNG, JPG up to 5 MB each · {form.images.length}/
+                      {MAX_IMAGES} used on free plan
                     </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => set("images", e.target.files)}
-                      className="mt-3 text-sm"
-                    />
                   </div>
-                </div>
-                {form.images && form.images.length > 3 && (
-                  <p className="mt-1 text-xs text-destructive">
-                    Free plan allows up to 3 images. Only the first 3 will be
-                    uploaded.
-                  </p>
+                </button>
+
+                {imageError && (
+                  <p className="mt-2 text-xs text-destructive">{imageError}</p>
+                )}
+
+                {/* Previews */}
+                {imagePreviews.length > 0 && (
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    {imagePreviews.map((src, idx) => (
+                      <div
+                        key={src}
+                        className="group relative aspect-square overflow-hidden rounded-lg border border-border"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt={`Business image ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        {!form.images[idx] ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                            <Loader2 className="h-5 w-5 animate-spin text-white" />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx)}
+                            className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -719,7 +849,7 @@ export default function ListBusinessPage() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploadingImages}
               className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
             >
               {submitting ? (

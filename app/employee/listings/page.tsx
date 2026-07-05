@@ -3,16 +3,16 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit2, Eye, Trash2, Search, Filter } from "lucide-react";
 import { Listing } from "@/types/Listing";
-import Link from "next/link";
 import { listingService } from "@/service/apis/listing.service";
+import { AddListingModal } from "@/components/admin/listing/AddListingModal";
 
 export default function EmployeeListingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "active" | "inactive" | "pending"
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive" | "pending"
   >("all");
   const [employeeListings, setEmployeeListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const fetchListing = async () => {
     try {
@@ -65,13 +65,13 @@ export default function EmployeeListingsPage() {
             Manage all your business listings
           </p>
         </div>
-        <Link
-          href="/employee/listings/new"
+        <button
+          onClick={() => setIsAddModalOpen(true)}
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-4 w-4" />
           Create New Listing
-        </Link>
+        </button>
       </div>
 
       {/* Stats */}
@@ -212,9 +212,6 @@ export default function EmployeeListingsPage() {
                         <button className="text-muted-foreground hover:text-foreground transition-colors p-1">
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button className="text-muted-foreground hover:text-destructive transition-colors p-1">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -233,6 +230,13 @@ export default function EmployeeListingsPage() {
           </table>
         </div>
       </div>
+
+      {/* Add Listing Modal */}
+      <AddListingModal
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={fetchListing}
+      />
     </div>
   );
 }

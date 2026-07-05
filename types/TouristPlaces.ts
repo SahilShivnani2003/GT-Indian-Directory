@@ -42,4 +42,5 @@ export interface CreateTouristPlace {
     contactNumber: string
     images: string[]
     featured: boolean
+    status?: "active" | "pending" | "inactive"
 }

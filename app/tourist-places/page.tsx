@@ -266,7 +266,7 @@ export default function TouristPlacesPage() {
 
                     {/* View Details Button */}
                     <Link
-                      href={`/tourist-places/${place.slug}`}
+                      href={`/tourist-places/${place.id}`}
                       className="mt-4 block w-full rounded-lg bg-primary py-2 text-center text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                     >
                       View Details

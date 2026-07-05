@@ -40,6 +40,7 @@ export function Header() {
 
   // Close profile dropdown when clicking outside
   useEffect(() => {
+    fetchCategories();
     function handleClickOutside(e: MouseEvent) {
       if (
         profileRef.current &&
@@ -50,7 +51,7 @@ export function Header() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-    fetchCategories();
+    
   }, []);
 
   const fetchCategories = async() =>{

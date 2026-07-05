@@ -41,4 +41,5 @@ export interface CreateListing {
   city: string;
   state: string;
   pinCode: string;
+  featured?: boolean;
 }
