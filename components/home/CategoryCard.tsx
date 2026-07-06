@@ -39,7 +39,7 @@ export function CategoryCard({
 
   return (
     <Link
-      href={`/categories/${category.slug}`}
+      href={`/listings?category=${category.name}`}
       className="group flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center transition-all hover:border-primary/30 hover:shadow-lg"
     >
       <Image
