@@ -65,7 +65,7 @@ export default function CategoriesPage() {
           {categories && categories.map((category, i) => (
             <Link
               key={category.slug}
-              href={`/categories/${category.slug}`}
+              href={`/listings?category=${category.name}`}
               className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
             >
               {/* Image area — tall enough to be seen */}

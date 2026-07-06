@@ -14,7 +14,7 @@ export function CategoryCard({
   if (variant === "compact") {
     return (
       <Link
-        href={`/categories/${category.slug}`}
+        href={`/listings?category=${category.name}`}
         className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-md"
       >
         <Image
