@@ -23,7 +23,8 @@ export default function AdminProductsPage() {
         pageNumber: 1,
         pageSize: 100,
       })
-      setProducts(response.data?.data || [])
+      debugger
+      setProducts(response.data?.data?.data || [])
     } catch (error) {
       console.error('Error fetching products:', error)
     } finally {
